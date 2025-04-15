@@ -2,18 +2,6 @@
 #include <algorithm>
 #include <limits>
 
-bool AABB::intersects(const AABB& other) const {
-    return (min.x <= other.max.x && max.x >= other.min.x) &&
-           (min.y <= other.max.y && max.y >= other.min.y) &&
-           (min.z <= other.max.z && max.z >= other.min.z);
-}
-
-bool AABB::intersectsSphere(const glm::vec3& center, float radius) const {
-    glm::vec3 closest = glm::clamp(center, min, max);
-    float distance = glm::length(center - closest);
-    return distance <= radius;
-}
-
 BVHNode::~BVHNode() {
     delete left;
     delete right;
@@ -107,4 +95,32 @@ AABB BVH::computeCentroidAABB(const std::vector<GLuint>& triangleIndices) {
         aabb.max = glm::max(aabb.max, centroid);
     }
     return aabb;
+}
+
+void BVHNode::query(const AABB& queryAABB, std::vector<size_t>& results) const {
+    // First check if this node's AABB overlaps with query AABB
+    if (!BVH::checkAABBOverlap(aabb, queryAABB)) {
+        return;
+    }
+
+    if (isLeaf()) {
+        // If leaf node, add all triangle indices
+        results.insert(results.end(), triangleIndices.begin(), triangleIndices.end());
+    } else {
+        // Recurse into children
+        left->query(queryAABB, results);
+        right->query(queryAABB, results);
+    }
+}
+
+void BVH::query(const AABB& queryAABB, std::vector<size_t>& results) const {
+    if (root) {
+        root->query(queryAABB, results);
+    }
+}
+
+bool BVH::checkAABBOverlap(const AABB& a, const AABB& b) {
+    return (a.min.x <= b.max.x && a.max.x >= b.min.x) &&
+           (a.min.y <= b.max.y && a.max.y >= b.min.y) &&
+           (a.min.z <= b.max.z && a.max.z >= b.min.z);
 }

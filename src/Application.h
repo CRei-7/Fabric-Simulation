@@ -17,9 +17,8 @@
 #include "Collision.h"
 #include "Shader.h"
 #include "Model.h"
-// #include "TableMesh.cpp"
-#include "NewCollision.h"
 #include "BVH.h"
+#include "Table.h"
 
 class Application
 {
@@ -31,12 +30,15 @@ public:
     void Cleanup();
 
     Shader* shader;
+    Shader* tableShader;
     Shader* importedModelShader;
     BVH* clothBVH;
     Model* ourModel;
+    Mesh* modelMesh;
     // Mesh* table;
 
 private:
+    Table* table;
     GLFWwindow* window;
     ImGuiManager imgui_manager;
     const char* glsl_version;

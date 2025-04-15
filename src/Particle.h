@@ -28,7 +28,9 @@ public:
             acceleration += force / mass;
         }
     }
-
+    bool getStatic() {
+        return isStatic;
+    }
     void update(float deltaTime) {
         if (!isStatic) {
             glm::vec3 temp = position;

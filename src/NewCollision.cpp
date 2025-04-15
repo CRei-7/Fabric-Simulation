@@ -78,6 +78,55 @@ bool NewCollision::checkTriangleObjectIntersection(
     return false;
 }
 
+void NewCollision::projectTriangleOntoAxis(
+    const glm::vec3& axis,
+    const glm::vec3& p1, const glm::vec3& p2, const glm::vec3& p3,
+    float& minProj, float& maxProj)
+{
+    minProj = maxProj = glm::dot(axis, p1);
+    float p2Proj = glm::dot(axis, p2);
+    float p3Proj = glm::dot(axis, p3);
+
+    minProj = std::min({minProj, p2Proj, p3Proj});
+    maxProj = std::max({maxProj, p2Proj, p3Proj});
+}
+
+// bool NewCollision::trianglesIntersectSAT(
+//     const glm::vec3& v1, const glm::vec3& v2, const glm::vec3& v3,
+//     const glm::vec3& u1, const glm::vec3& u2, const glm::vec3& u3)
+// {
+//     glm::vec3 axes[] = {
+//         glm::normalize(glm::cross(v2 - v1, v3 - v1)),  // Normal of triangle 1
+//         glm::normalize(glm::cross(u2 - u1, u3 - u1))   // Normal of triangle 2
+//     };
+
+//     // Check projections onto each axis
+//     for (int i = 0; i < 2; i++) {
+//         float min1, max1, min2, max2;
+//         projectTriangleOntoAxis(axes[i], v1, v2, v3, min1, max1);
+//         projectTriangleOntoAxis(axes[i], u1, u2, u3, min2, max2);
+//         if (max1 < min2 || max2 < min1) return false; // No overlap, no collision
+//     }
+
+//     return true;
+// }
+
+// bool NewCollision::checkTriangleTriangleIntersectionForModel(
+//     const glm::vec3& v1, const glm::vec3& v2, const glm::vec3& v3,  // Cloth triangle
+//     const glm::vec3& u1, const glm::vec3& u2, const glm::vec3& u3,  // Imported model triangle
+//     glm::vec3& intersectionPoint, glm::vec3& normal)
+// {
+//     normal = glm::normalize(glm::cross(v2 - v1, v3 - v1)); // Cloth triangle normal
+
+//     // Check for triangle overlap using SAT (Separating Axis Theorem)
+//     if (!trianglesIntersectSAT(v1, v2, v3, u1, u2, u3))
+//         return false;
+
+//     // If overlapping, estimate the intersection point as the midpoint of closest points
+//     intersectionPoint = (v1 + v2 + v3 + u1 + u2 + u3) / 6.0f;
+//     return true;
+// }
+
 void NewCollision::traverseBVH(BVHNode* node, const Object& object, std::vector<GLuint>& potentialTriangles) {
     if (!node) return;
 
@@ -102,6 +151,34 @@ void NewCollision::traverseBVH(BVHNode* node, const Object& object, std::vector<
     }
 }
 
+// void NewCollision::traverseBVHForModel(BVHNode* nodeA, StaticBVHNode* nodeB,
+//                                std::vector<GLuint>& clothTriangles,
+//                                std::vector<GLuint>& modelTriangles) {
+//     if (!nodeA || !nodeB) return;
+
+//     // Check if AABB of cloth and model intersect
+//     if (!nodeA->aabb.intersects(nodeB->aabb)) return;
+
+//     // If both are leaves, collect their triangle indices
+//     if (nodeA->isLeaf() && nodeB->isLeaf()) {
+//         clothTriangles.insert(clothTriangles.end(),
+//                               nodeA->triangleIndices.begin(), nodeA->triangleIndices.end());
+//         modelTriangles.insert(modelTriangles.end(),
+//                               nodeB->triangleIndices.begin(), nodeB->triangleIndices.end());
+//         return;
+//     }
+
+//     // Recursively traverse both BVH trees
+//     if (!nodeA->isLeaf()) {
+//         traverseBVHForModel(nodeA->left, nodeB, clothTriangles, modelTriangles);
+//         traverseBVHForModel(nodeA->right, nodeB, clothTriangles, modelTriangles);
+//     }
+
+//     if (!nodeB->isLeaf()) {
+//         traverseBVHForModel(nodeA, nodeB->left, clothTriangles, modelTriangles);
+//         traverseBVHForModel(nodeA, nodeB->right, clothTriangles, modelTriangles);
+//     }
+// }
 void NewCollision::resolveCollision(
     std::vector<Particle>& particles,
     BVH* clothBVH,
@@ -162,6 +239,26 @@ void NewCollision::resolveCollision(
         }
     }
 }
+
+// void NewCollision::resolveParticleCollisionForModel(
+//     Particle& particle,
+//     const glm::vec3& normal)
+// {
+//     const float stiffness = 1000.0f;
+//     const float damping = 0.2f;
+
+//     glm::vec3 velocity = particle.getPosition() - particle.getPreviousPosition();
+//     glm::vec3 velocityNormal = glm::dot(velocity, normal) * normal;
+//     glm::vec3 velocityTangent = velocity - velocityNormal;
+
+//     glm::vec3 force = -stiffness * normal - damping * velocityNormal;
+
+//     particle.applyForce(force);
+
+//     // Move particle to avoid penetration
+//     particle.setPosition(particle.getPosition() + normal * 0.01f);
+// }
+
 
 void NewCollision::resolveCollisionWithOutBVH(
         std::vector<Particle>& particles,
@@ -253,3 +350,162 @@ void NewCollision::resolveParticleCollision(
         particle.setPosition(particle.getPosition() - normal * penetrationDepth);
     }
 }
+
+void NewCollision::traverseBothBVHs(BVHNode* nodeA, BVHNode* nodeB, std::vector<std::pair<GLuint, GLuint>>& potentialPairs) {
+    if (!nodeA || !nodeB) return;
+
+    if (!nodeA->aabb.intersects(nodeB->aabb)) return;
+
+    if (nodeA->isLeaf() && nodeB->isLeaf()) {
+        // Add all triangle pairs between the two leaves
+        for (auto i : nodeA->triangleIndices)
+            for (auto j : nodeB->triangleIndices)
+                potentialPairs.emplace_back(i, j);
+    } else {
+        if (nodeA->isLeaf()) {
+            traverseBothBVHs(nodeA, nodeB->left, potentialPairs);
+            traverseBothBVHs(nodeA, nodeB->right, potentialPairs);
+        } else {
+            traverseBothBVHs(nodeA->left, nodeB, potentialPairs);
+            traverseBothBVHs(nodeA->right, nodeB, potentialPairs);
+        }
+    }
+}
+
+// void NewCollision::resolveModelClothCollision(
+//     std::vector<Particle>& clothParticles,
+//     Model& model,
+//     StaticBVH* modelBVH,
+//     float collisionDistance,
+//     float repulsionStrength) {
+
+//     for (auto& particle : clothParticles) {
+//         glm::vec3 particlePos = particle.getPosition();
+//         Triangle nearestTri;
+//         glm::vec3 closestPoint;
+//         float minDist = FLT_MAX;
+
+//         modelBVH->findNearestTriangle(particlePos, nearestTri, closestPoint, minDist);
+
+//         if (minDist < collisionDistance) {
+//             glm::vec3 normal = nearestTri.normal;
+//             glm::vec3 dir = particlePos - closestPoint;
+//             float penetration = collisionDistance - minDist;
+
+//             // Apply repulsion force
+//             particle.applyForce(normal * penetration * repulsionStrength);
+
+//             // Position correction
+//             particle.setPosition(closestPoint + normal * collisionDistance);
+//         }
+//     }
+// }
+
+// void NewCollision::resolveModelClothCollision(
+//     std::vector<Particle>& clothParticles,
+//     Model& model,
+//     StaticBVH* modelBVH,
+//     float collisionDistance,
+//     float repulsionStrength) {
+
+//     const float maxVelocity = 5.0f; // Prevent velocity explosions
+//     const float damping = 0.95f;    // Energy loss on collision
+//     const float correctionFactor = 0.5f; // Reduce over-correction
+
+//     std::cout << "Model BVH root AABB: ["
+//                   << modelBVH->root->aabb.min.x << "," << modelBVH->root->aabb.min.y << "," << modelBVH->root->aabb.min.z
+//                   << "] - ["
+//                   << modelBVH->root->aabb.max.x << "," << modelBVH->root->aabb.max.y << "," << modelBVH->root->aabb.max.z
+//                   << "]\n";
+
+//         std::cout << "Cloth particle positions sample: ["
+//                   << clothParticles[0].getPosition().x << ","
+//                   << clothParticles[0].getPosition().y << ","
+//                   << clothParticles[0].getPosition().z << "]\n";
+
+//     for (auto& particle : clothParticles) {
+//         glm::vec3 particlePos = particle.getPosition();
+//         Triangle nearestTri;
+//         glm::vec3 closestPoint;
+//         float minDist = FLT_MAX;
+
+//         modelBVH->findNearestTriangle(particlePos, nearestTri, closestPoint, minDist);
+
+//         if (minDist < collisionDistance) {
+//             glm::vec3 normal = nearestTri.normal;
+//             glm::vec3 dirToParticle = particlePos - closestPoint;
+//             float penetration = collisionDistance - minDist;
+
+//             // Compute velocity before modifying position
+//             glm::vec3 velocity = (particlePos - particle.getPreviousPosition()) * damping;
+
+//             // Gradual position correction
+//             glm::vec3 correction = normal * (penetration * correctionFactor);
+//             particle.setPosition(particlePos + correction);
+
+//             // Conservative force application
+//             glm::vec3 force = normal * (penetration * repulsionStrength);
+//             particle.applyForce(force);
+
+//             // Velocity control (limit extreme changes)
+//             if (glm::length(velocity) > maxVelocity) {
+//                 velocity = glm::normalize(velocity) * maxVelocity;
+//             }
+
+//             // Update previous position correctly
+//             particle.setPreviousPosition(particle.getPosition() - velocity);
+//         }
+//     }
+// }
+
+// void NewCollision::resolveModelClothCollision(
+//     std::vector<Particle>& particles,
+//     BVH* clothBVH,
+//     StaticBVH* modelBVH, // BVH for the imported model
+//     float deltaTime,
+//     std::vector<GLuint>& collidingIndices)
+// {
+//     if (!clothBVH || !clothBVH->root || !modelBVH || !modelBVH->root)
+//         return;
+
+//     clothBVH->refit();  // Update BVH for cloth
+//     // modelBVH->refit();  // Update BVH for the imported model
+
+//     // Get potential colliding triangles from both models
+//     std::vector<GLuint> clothTriangles, modelTriangles;
+//     traverseBVHForModel(clothBVH->root, modelBVH->root, clothTriangles, modelTriangles);
+
+//     for (size_t i = 0; i < clothTriangles.size(); i += 3) {
+//         for (size_t j = 0; j < modelTriangles.size(); j += 3) {
+
+//             // Get triangle indices
+//             GLuint i1 = clothTriangles[i], i2 = clothTriangles[i + 1], i3 = clothTriangles[i + 2];
+//             GLuint u1 = modelTriangles[j], u2 = modelTriangles[j + 1], u3 = modelTriangles[j + 2];
+
+//             if (i1 >= particles.size() || i2 >= particles.size() || i3 >= particles.size())
+//                 continue;
+
+//             Particle& p1 = particles[i1];
+//             Particle& p2 = particles[i2];
+//             Particle& p3 = particles[i3];
+
+//             glm::vec3 intersectionPoint, normal;
+
+//             // Perform triangle-triangle intersection test
+//             if (checkTriangleTriangleIntersectionForModel(
+//                     p1.getPosition(), p2.getPosition(), p3.getPosition(),
+//                     modelBVH->vertices[u1], modelBVH->vertices[u2], modelBVH->vertices[u3],
+//                     intersectionPoint, normal))
+//             {
+//                 collidingIndices.push_back(i1);
+//                 collidingIndices.push_back(i2);
+//                 collidingIndices.push_back(i3);
+
+//                 // Resolve collision by applying correction to cloth particles
+//                 resolveParticleCollisionForModel(p1, normal);
+//                 resolveParticleCollisionForModel(p2, normal);
+//                 resolveParticleCollisionForModel(p3, normal);
+//             }
+//         }
+//     }
+// }

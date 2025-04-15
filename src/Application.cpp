@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
-
+#include "CollisionDetection.h"
 
 // Error callback function
 static void glfw_error_callback(int error, const char* description)
@@ -15,7 +15,9 @@ static void glfw_error_callback(int error, const char* description)
 Application::Application() : window(nullptr), glsl_version("#version 330"), cKeyPressed(false), tKeyPressed(false), oKeyPressed(false) {}
 
 // Destructor
-Application::~Application() {}
+Application::~Application() {
+    if (table) delete table;
+}
 
 // Initialize GLFW, OpenGL, and ImGui
 bool Application::Init()
@@ -70,10 +72,11 @@ bool Application::Init()
 
     // For model loading
     // tell stb_image.h to flip loaded texture's on the y-axis (before loading model).
-    // stbi_set_flip_vertically_on_load(true);
+    stbi_set_flip_vertically_on_load(true);
 
-    //   glEnable(GL_DEPTH_TEST);
+      // glEnable(GL_DEPTH_TEST);
     shader = new Shader("../shaders/VertShader.vert", "../shaders/FragShader.frag");
+    tableShader = new Shader("../shaders/tableVert.vert", "../shaders/tableFrag.frag");
     // importedModelShader = new Shader("../shaders/modelVertex.vert", "../shaders/modelFragment.frag");
     // std::cout << "Loading models" << std::endl;
        // // load models
@@ -84,100 +87,6 @@ bool Application::Init()
 }
 
 void Application::SetupOpenGL() {
-    // std::vector<Vertex> vertices = {
-    //     // Table top vertices (y = 0.8 - 0.05 = 0.75)
-    //     {-0.5f,  0.75f,  0.3f},  // 0 front left
-    //     { 0.5f,  0.75f,  0.3f},  // 1 front right
-    //     { 0.5f,  0.75f, -0.3f},  // 2 back right
-    //     {-0.5f,  0.75f, -0.3f},  // 3 back left
-    //     {-0.5f,  0.65f,  0.3f},  // 4 front left bottom
-    //     { 0.5f,  0.65f,  0.3f},  // 5 front right bottom
-    //     { 0.5f,  0.65f, -0.3f},  // 6 back right bottom
-    //     {-0.5f,  0.65f, -0.3f},  // 7 back left bottom
-
-    //     // Front left leg (y -= 0.05)
-    //     {-0.45f, 0.65f,  0.25f}, // 8  top
-    //     {-0.35f, 0.65f,  0.25f}, // 9  top
-    //     {-0.35f, 0.65f,  0.15f}, // 10 top
-    //     {-0.45f, 0.65f,  0.15f}, // 11 top
-    //     {-0.45f, -0.05f,  0.25f}, // 12 bottom
-    //     {-0.35f, -0.05f,  0.25f}, // 13 bottom
-    //     {-0.35f, -0.05f,  0.15f}, // 14 bottom
-    //     {-0.45f, -0.05f,  0.15f}, // 15 bottom
-
-    //     // Front right leg (y -= 0.05)
-    //     { 0.35f, 0.65f,  0.25f}, // 16 top
-    //     { 0.45f, 0.65f,  0.25f}, // 17 top
-    //     { 0.45f, 0.65f,  0.15f}, // 18 top
-    //     { 0.35f, 0.65f,  0.15f}, // 19 top
-    //     { 0.35f, -0.05f,  0.25f}, // 20 bottom
-    //     { 0.45f, -0.05f,  0.25f}, // 21 bottom
-    //     { 0.45f, -0.05f,  0.15f}, // 22 bottom
-    //     { 0.35f, -0.05f,  0.15f}, // 23 bottom
-
-    //     // Back left leg (y -= 0.05)
-    //     {-0.45f, 0.65f, -0.15f}, // 24 top
-    //     {-0.35f, 0.65f, -0.15f}, // 25 top
-    //     {-0.35f, 0.65f, -0.25f}, // 26 top
-    //     {-0.45f, 0.65f, -0.25f}, // 27 top
-    //     {-0.45f, -0.05f, -0.15f}, // 28 bottom
-    //     {-0.35f, -0.05f, -0.15f}, // 29 bottom
-    //     {-0.35f, -0.05f, -0.25f}, // 30 bottom
-    //     {-0.45f, -0.05f, -0.25f}, // 31 bottom
-
-    //     // Back right leg (y -= 0.05)
-    //     { 0.35f, 0.65f, -0.15f}, // 32 top
-    //     { 0.45f, 0.65f, -0.15f}, // 33 top
-    //     { 0.45f, 0.65f, -0.25f}, // 34 top
-    //     { 0.35f, 0.65f, -0.25f}, // 35 top
-    //     { 0.35f, -0.05f, -0.15f}, // 36 bottom
-    //     { 0.45f, -0.05f, -0.15f}, // 37 bottom
-    //     { 0.45f, -0.05f, -0.25f}, // 38 bottom
-    //     { 0.35f, -0.05f, -0.25f}  // 39 bottom
-    // };
-
-
-    // // Indices for the tabletop (2 triangles)
-    //     std::vector<unsigned int> indices = {
-    //         // Table top - top face
-    //                0, 1, 2,    0, 2, 3,
-    //                // Table top - bottom face
-    //                4, 5, 6,    4, 6, 7,
-    //                // Table top - front face
-    //                0, 1, 5,    0, 5, 4,
-    //                // Table top - back face
-    //                2, 3, 7,    2, 7, 6,
-    //                // Table top - left face
-    //                0, 3, 7,    0, 7, 4,
-    //                // Table top - right face
-    //                1, 2, 6,    1, 6, 5,
-
-    //                // Front left leg
-    //                8, 9, 13,   8, 13, 12,    // front
-    //                9, 10, 14,  9, 14, 13,    // right
-    //                10, 11, 15, 10, 15, 14,   // back
-    //                11, 8, 12,  11, 12, 15,   // left
-
-    //                // Front right leg
-    //                16, 17, 21, 16, 21, 20,   // front
-    //                17, 18, 22, 17, 22, 21,   // right
-    //                18, 19, 23, 18, 23, 22,   // back
-    //                19, 16, 20, 19, 20, 23,   // left
-
-    //                // Back left leg
-    //                24, 25, 29, 24, 29, 28,   // front
-    //                25, 26, 30, 25, 30, 29,   // right
-    //                26, 27, 31, 26, 31, 30,   // back
-    //                27, 24, 28, 27, 28, 31,   // left
-
-    //                // Back right leg
-    //                32, 33, 37, 32, 37, 36,   // front
-    //                33, 34, 38, 33, 38, 37,   // right
-    //                34, 35, 39, 34, 39, 38,   // back
-    //                35, 32, 36, 35, 36, 39    // left
-    //     };
-
-    // table = new Mesh(vertices, indices);
 
     glEnable(GL_DEPTH_TEST);//for depth testing
     glEnable(GL_CULL_FACE);//for shading two sides of the mesh with different colors
@@ -200,6 +109,8 @@ void Application::SetupOpenGL() {
 
     deltaTime = 0.0f;
     lastFrame = 0.0f;
+
+    table = new Table(0.5f, 0.05f, 0.05f, 0.5f, -0.2f, 36, glm::vec3(0.0f, 0.0f, 0.5f), "../textures/wood.jpg");
 }
 
 void Application::processInput(GLFWwindow* window) {
@@ -314,12 +225,12 @@ glm::vec3 getRandomWindDirection() {
 
 void Application::setupCloth() {
     // Grid parameters
-    int column = 20; // Number of columns
-    int row = 20;    // Number of rows
+    int column = 30; // Number of columns
+    int row = 30;    // Number of rows
     float disX = 0.05f; // Distance between particles in x direction
     float disY = 0.05f; // Distance between particles in y direction
     float initialY = 0.3f; // Y-coordinate for the top pinned particle
-    glm::vec3 Offset(-0.5f, 0.0f, 0.0f); // Offset for initial position
+    glm::vec3 Offset(-0.1f, 0.0f, 0.0f); // Offset for initial position
     float k = 50.0f; // Structural Spring constant
     float shearK = 10.5f; // Shear spring constant
 
@@ -461,7 +372,7 @@ void Application::setupClothMesh(const std::vector<Particle>& particles, int col
 
 void Application::renderClothMesh(GLuint shaderProgram, const std::vector<Particle>& particles, const glm::mat4& view, const glm::mat4& projection) {
     glUseProgram(shaderProgram);
-
+    glUniform1i(glGetUniformLocation(shaderProgram, "useTexture"), 0);
     // Set model, view, projection matrices
     glm::mat4 model = glm::mat4(1.0f);
     GLuint modelLoc = glGetUniformLocation(shaderProgram, "model");
@@ -497,7 +408,6 @@ void Application::renderClothMesh(GLuint shaderProgram, const std::vector<Partic
     // Render front faces (side 1)
     glCullFace(GL_BACK);  // Cull the back faces, render front faces
 
-    bool currentCollision = NewCollision::isColliding;
     // std::cout<<"currentCollision: "<<currentCollision<<std::endl;
 
     // // Prepare a vector to hold the result
@@ -539,12 +449,19 @@ void Application::renderClothMesh(GLuint shaderProgram, const std::vector<Partic
 void Application::MainLoop()
 {
     setupCloth();
+    float collisionDistance = 0.05f;
+        float repulsionStrength = 10.0f;
+        float collisionThreshold = 0.05f;
+        float particleRadius = 0.02f;
     // Object Cube;
     // Cube.SetupCube(0.4f, glm::vec3(0.0f, -0.2f, 0.5f));
 
-    Object Sphere;
-    Sphere.SetupSphere(0.3f, glm::vec3(0.0, -0.2, 0.5));
+    // Object Sphere;
+    // Adjust based on desired stiffness
+    // Sphere.SetupSphere(0.3f, glm::vec3(0.0, -0.2, 0.5));
 
+    // ClothModelCollision::validateBVH(modelBVH);
+    // ClothModelCollision::validateClothParticles(particles);
     while (!glfwWindowShouldClose(window))
     {
         bool should_close = false;
@@ -557,12 +474,11 @@ void Application::MainLoop()
 
         // Check if cloth needs to be reset due to orientation toggle
         if (clothNeedsReset) {
-            particles.clear();  // Clear previous particles
-            springs.clear();    // Clear previous springs
-            setupCloth();       // Re-setup the cloth with the new orientation
-            clothNeedsReset = false;  // Reset the flag
-        }
-
+                    particles.clear();
+                    springs.clear();
+                    setupCloth();
+                    clothNeedsReset = false;
+                }
         glfwPollEvents();
         imgui_manager.BeginFrame();
 
@@ -582,18 +498,17 @@ void Application::MainLoop()
         glClear(GL_COLOR_BUFFER_BIT);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);//clear the depth buffer at each iteration
 
-        //activates the shader
-        glUseProgram(shader->shaderProgram);
-
         // use imported model shaders
         // importedModelShader->use();
 
         glm::vec3 lightColor(1.0f, 1.0f, 1.0f);  // White light
         GLuint lightColorLoc = glGetUniformLocation(shader->shaderProgram, "lightColor");
-        glUniform3fv(lightColorLoc, 1, glm::value_ptr(lightColor));
+        // glUniform3fv(lightColorLoc, 1, glm::value_ptr(lightColor));
 
         //for perspective transformation
-        glm::mat4 model = glm::mat4(1.0f);//transformations we'd like to apply to all object's vertices to the global world space
+        glm::mat4 clothModel = glm::mat4(1.0f);//transformations we'd like to apply to all object's vertices to the global world space
+        clothModel = glm::translate(clothModel, glm::vec3(0.0f,-0.2f, 0.5f));
+        clothModel = glm::scale(clothModel, glm::vec3(0.05f));
         glm::mat4 view = glm::mat4(1.0f);//to set the camera location
         glm::mat4 projection = glm::mat4(1.0f);//for perspective projection
 
@@ -608,9 +523,20 @@ void Application::MainLoop()
 
         // importedModelShader->setMat4("projection", projection);
         // importedModelShader->setMat4("view", view);
-        // importedModelShader->setMat4("model", model);
+        // importedModelShader->setMat4("model", clothModel);
 
+
+        // ourModel->drawBVH(*importedModelShader, false);
         // ourModel->Draw(*importedModelShader, imgui_manager.wireframeMode);
+
+        shader->use();
+        shader->setVec3("lightColor", lightColor); // Set lightColor for the cloth's shader
+        shader->setVec3("lightPos", lightPos);
+        shader->setVec3("viewPos", cameraPos);
+        //activates the shader
+        glUseProgram(shader->shaderProgram);
+
+        glm::mat4 model = glm::mat4(1.0f);//transformations we'd like to apply to all cloth
 
         // Update to the wind direction periodically
         windTimer += deltaTime;
@@ -619,14 +545,7 @@ void Application::MainLoop()
             windTimer = 0.0f; //Timer reset
         }
 
-
-        clothBVH->refit();
-        std::cout << " Without BVH: " << NewCollision::collisionChecks << "\n";
-        std::cout << " - With BVH: " << NewCollision::bvhCollisionChecks << "\n";
-
-        // NewCollision::resolveCollision(particles, clothBVH, indices, Sphere, deltaTime, collidingIndices);
-        NewCollision::resolveCollisionWithOutBVH(particles, indices, Sphere, deltaTime, collidingIndices);
-
+        // CollisionHandler::checkAndResolveCollisions(particles, *ourModel);
         for (auto& particle : particles) {
             //resolveCollision(particle, Cube   );
             for (int i = 0; i < 20; ++i) {
@@ -648,17 +567,20 @@ void Application::MainLoop()
             particle.render(shader->shaderProgram, view, projection);
         }
 
+        // Resolve collisions with the table after updating particles
+        CollisionDetection::resolveClothTableCollisions(particles, *table);
         // Update and render springs
         for (auto& spring : springs) {
             spring.update();
             spring.render(shader->shaderProgram, model, view, projection);
         }
 
-        // Cube.render(shader->shaderProgram,   view, projection, lightPos, cameraPos);
-        Sphere.render(shader->shaderProgram, view, projection, lightPos, cameraPos);
+        // // Cube.render(shader->shaderProgram,   view, projection, lightPos, cameraPos);
+        // // Sphere.render(shader->shaderProgram, view, projection, lightPos, cameraPos);
 
         renderClothMesh(shader->shaderProgram, particles, view, projection);
-        // table->Draw(shader->shaderProgram, glm::mat4(1.0f), view, projection);
+        // Render the table
+        table->render(tableShader->shaderProgram, view, projection);
 
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
@@ -717,6 +639,7 @@ void Application::scroll_callback(GLFWwindow* window, double xoffset, double yof
 // Cleanup resources
 void Application::Cleanup()
 {
+    if (table) delete table;
     imgui_manager.Cleanup();
     delete clothBVH;
     glfwDestroyWindow(window);
