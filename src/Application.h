@@ -14,7 +14,6 @@
 #include "Particle.h"
 #include "Spring.h"
 #include "Object.h"
-#include "Collision.h"
 #include "Shader.h"
 #include "Model.h"
 #include "BVH.h"

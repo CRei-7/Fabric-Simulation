@@ -5,7 +5,7 @@
 #include <glm/gtc/type_ptr.hpp>
 #include "CollisionDetection.h"
 #include "Collision.h"
-#include "NewCollision.cpp"
+#include "NewCollision.h"
 
 // Error callback function
 static void glfw_error_callback(int error, const char* description)

@@ -145,6 +145,32 @@ bool NewCollision::checkTriangleObjectIntersection(
 //         traverseBVHForModel(nodeA, nodeB->right, clothTriangles, modelTriangles);
 //     }
 // }
+//
+void NewCollision::traverseBVH(BVHNode* node, const Object& object, std::vector<GLuint>& potentialTriangles) {
+    if (!node) return;
+
+    bool intersects = false;
+    if (object.isCube()) {
+        glm::vec3 center = object.getCenter();
+        float halfLength = object.getHalfLength() + offset;
+        AABB cubeAABB{center - glm::vec3(halfLength), center + glm::vec3(halfLength)};
+        intersects = node->aabb.intersects(cubeAABB);
+    } else if (object.isSphere()) {
+        intersects = node->aabb.intersectsSphere(object.getCenter(), object.getHalfLength() + offset);
+    }
+
+    if (!intersects) return;
+
+    if (node->isLeaf()) {
+        potentialTriangles.insert(potentialTriangles.end(),
+            node->triangleIndices.begin(), node->triangleIndices.end());
+    } else {
+        traverseBVH(node->left, object, potentialTriangles);
+        traverseBVH(node->right, object, potentialTriangles);
+    }
+}
+
+
 void NewCollision::resolveCollision(
     std::vector<Particle>& particles,
     BVH* clothBVH,
