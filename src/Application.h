@@ -20,6 +20,8 @@
 #include "BVH.h"
 #include "Table.h"
 
+// #include "stb_image.h"
+
 class Application
 {
 public:
@@ -37,6 +39,8 @@ public:
     Mesh* modelMesh;
     // Mesh* table;
 
+    void TextureSetup();
+
 private:
     Table* table;
     GLFWwindow* window;
@@ -48,6 +52,16 @@ private:
     GLuint VAO;//Vertex Array Object whcih stores all the vertex attribute settings in a single object
     GLuint EBO;//Element Buffer Object for referencing values in VBO using indices
     GLuint normalVBO;
+    GLuint texCoordVBO;
+    GLuint texture;
+
+    GLuint furTexCoordVBO;
+    GLuint furNormalVBO;
+    GLuint furLengthVBO;
+
+    GLuint furVAO;
+    GLuint furVBO;
+    GLuint furEBO;
 
     glm::vec3 cameraPos;//camera position
     glm::vec3 cameraFront;//for specifying the direction in which camera is pointing
@@ -75,6 +89,7 @@ private:
 
     bool toggle_wind;
     bool tKeyPressed;//Press 'T' for wind
+    bool fKeyPressed;
     void setupCloth();
 
     bool toggleClothOrientation;//true for hanging cloth and false for falling cloth
@@ -94,12 +109,40 @@ private:
     std::vector<glm::vec3> vertices;
     std::vector<GLuint> indices;
     std::vector<glm::vec3> normals;
+    std::vector<glm::vec3> furVertices;
+    std::vector<GLuint> furIndices;
     std::vector<GLuint> collidingIndices;
 
     void setupClothMesh(const std::vector<Particle>& particles, int column, int row);
     void renderClothMesh(GLuint shaderProgram, const std::vector<Particle>& particles, const glm::mat4& view, const glm::mat4& projection);
 
+    void generateFurStrands(const std::vector<Particle>& particles, int column, int row);
+    //void generateFurStrands(const std::vector<Particle>& particles, const std::vector<GLuint>& indices, int furLayers, int furDensity);
+    std::vector<glm::vec2> furTexCoords;
+    std::vector<float> furLengths;
+
     glm::vec3 lightPos;  //light position
+    std::vector<glm::vec2> texCoords;
+    void calculateNormals();
+
+    bool ShowFur;
+    bool StartSimulation;
+    bool ShowParticle;
+    bool ShowSpring;
+
+    glm::vec3 lightColor;
+
+    float k; // Structural Spring constant
+    float shearK; // Shear spring constant
+    float bendK;
+
+    float StaticFrictionCoefficient, KineticFrictionCoefficient;
+
+    std::string filename;
+
+    std::unique_ptr<Object> currentObject;
+    bool SelectCube = false;
+    bool SelectSphere = false;
 };
 
 #endif // APPLICATION_H

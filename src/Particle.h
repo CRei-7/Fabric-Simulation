@@ -61,6 +61,10 @@ public:
         return radius;
     }
 
+    float getMass() const {
+        return mass;
+    }
+
     void render(GLuint shaderProgram, const glm::mat4& view, const glm::mat4& projection) {
         if (VAO == 0) {
             // Initialization of VAO and VBO for the particle (simple point representation)

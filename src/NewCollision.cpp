@@ -8,6 +8,7 @@
 bool NewCollision::isColliding = false;
 int NewCollision::bvhCollisionChecks = 0;
 int NewCollision::collisionChecks = 0;
+float NewCollision::offset = 0.01f;
 
 bool NewCollision::checkTriangleObjectIntersection(
     const glm::vec3& v1, const glm::vec3& v2, const glm::vec3& v3,
@@ -16,12 +17,12 @@ bool NewCollision::checkTriangleObjectIntersection(
     // Calculate triangle normal first - this is needed for both cube and sphere
     glm::vec3 edge1 = v2 - v1;
     glm::vec3 edge2 = v3 - v1;
-    normal = glm::normalize(glm::cross(edge1, edge2));
+    normal = -1.0f * glm::normalize(glm::cross(edge1, edge2));
 
     if (object.isCube()) {
         // Get cube bounds
         glm::vec3 center = object.getCenter();
-        float halfLength = object.getHalfLength();
+        float halfLength = object.getHalfLength() + offset;
         glm::vec3 cubeMin = center - glm::vec3(halfLength);
         glm::vec3 cubeMax = center + glm::vec3(halfLength);
 
@@ -50,14 +51,14 @@ bool NewCollision::checkTriangleObjectIntersection(
             //                 << "v1(" << v1.x << ", " << v1.y << ", " << v1.z << "), "
             //                 << "v2(" << v2.x << ", " << v2.y << ", " << v2.z << "), "
             //                 << "v3(" << v3.x << ", " << v3.y << ", " << v3.z << ")\n";
-            // return true;
+            return true;
         }
 
         return false;
     }
     else if (object.isSphere()) {
         glm::vec3 center = object.getCenter();
-        float radius = object.getHalfLength();
+        float radius = object.getHalfLength() + offset;
 
         // Check if any vertex is inside the sphere
         auto isInsideSphere = [&](const glm::vec3& p) {
@@ -78,18 +79,6 @@ bool NewCollision::checkTriangleObjectIntersection(
     return false;
 }
 
-void NewCollision::projectTriangleOntoAxis(
-    const glm::vec3& axis,
-    const glm::vec3& p1, const glm::vec3& p2, const glm::vec3& p3,
-    float& minProj, float& maxProj)
-{
-    minProj = maxProj = glm::dot(axis, p1);
-    float p2Proj = glm::dot(axis, p2);
-    float p3Proj = glm::dot(axis, p3);
-
-    minProj = std::min({minProj, p2Proj, p3Proj});
-    maxProj = std::max({maxProj, p2Proj, p3Proj});
-}
 
 // bool NewCollision::trianglesIntersectSAT(
 //     const glm::vec3& v1, const glm::vec3& v2, const glm::vec3& v3,
@@ -127,29 +116,6 @@ void NewCollision::projectTriangleOntoAxis(
 //     return true;
 // }
 
-void NewCollision::traverseBVH(BVHNode* node, const Object& object, std::vector<GLuint>& potentialTriangles) {
-    if (!node) return;
-
-    bool intersects = false;
-    if (object.isCube()) {
-        glm::vec3 center = object.getCenter();
-        float halfLength = object.getHalfLength();
-        AABB cubeAABB{center - glm::vec3(halfLength), center + glm::vec3(halfLength)};
-        intersects = node->aabb.intersects(cubeAABB);
-    } else if (object.isSphere()) {
-        intersects = node->aabb.intersectsSphere(object.getCenter(), object.getHalfLength());
-    }
-
-    if (!intersects) return;
-
-    if (node->isLeaf()) {
-        potentialTriangles.insert(potentialTriangles.end(),
-            node->triangleIndices.begin(), node->triangleIndices.end());
-    } else {
-        traverseBVH(node->left, object, potentialTriangles);
-        traverseBVH(node->right, object, potentialTriangles);
-    }
-}
 
 // void NewCollision::traverseBVHForModel(BVHNode* nodeA, StaticBVHNode* nodeB,
 //                                std::vector<GLuint>& clothTriangles,
@@ -185,7 +151,8 @@ void NewCollision::resolveCollision(
     const std::vector<GLuint>& triangleIndices,
     const Object& object,
     float deltaTime,
-    std::vector<GLuint>& collidingIndices // Pass by reference
+    std::vector<GLuint>& collidingIndices, // Pass by reference
+    float StaticFriction, float KineticFriction
     ) {
 
     // Add debug print
@@ -226,16 +193,16 @@ void NewCollision::resolveCollision(
             float penetrationDepth3 = glm::dot(normal, intersectionPoint - p3.getPosition());
 
             // Add colliding indices
-            collidingIndices.push_back(triangleIndices[i]);
-            collidingIndices.push_back(triangleIndices[i + 1]);
-            collidingIndices.push_back(triangleIndices[i + 2]);
+            //collidingIndices.push_back(triangleIndices[i]);
+            //collidingIndices.push_back(triangleIndices[i + 1]);
+            //collidingIndices.push_back(triangleIndices[i + 2]);
 
             isColliding = true;
 
             // Resolve collision for each particle
-            resolveParticleCollision(p1, normal, penetrationDepth1);
-            resolveParticleCollision(p2, normal, penetrationDepth2);
-            resolveParticleCollision(p3, normal, penetrationDepth3);
+            resolveParticleCollision(p1, normal, penetrationDepth1, deltaTime, StaticFriction, KineticFriction);
+            resolveParticleCollision(p2, normal, penetrationDepth2, deltaTime, StaticFriction, KineticFriction);
+            resolveParticleCollision(p3, normal, penetrationDepth3, deltaTime, StaticFriction, KineticFriction);
         }
     }
 }
@@ -265,8 +232,8 @@ void NewCollision::resolveCollisionWithOutBVH(
         const std::vector<GLuint>& triangleIndices,
         const Object& object,
         float deltaTime,
-        std::vector<GLuint>& collidingIndices // Pass by reference
-        ) {
+        std::vector<GLuint>& collidingIndices, // Pass by reference
+        float StaticFriction, float KineticFriction) {
         // Add debug print
         // std::cout << "Starting collision resolution with " << triangleIndices.size() / 3
         //           << " triangles" << std::endl;
@@ -306,15 +273,15 @@ void NewCollision::resolveCollisionWithOutBVH(
 
                 // isColliding = true;
                 // Push the indices of the colliding triangle
-                collidingIndices.push_back(triangleIndices[i]);
-                collidingIndices.push_back(triangleIndices[i + 1]);
-                collidingIndices.push_back(triangleIndices[i + 2]);
+                //collidingIndices.push_back(triangleIndices[i]);
+                //collidingIndices.push_back(triangleIndices[i + 1]);
+                //collidingIndices.push_back(triangleIndices[i + 2]);
 
                 isColliding = true;
                 // Resolve collision for each particle
-                resolveParticleCollision(p1, normal, penetrationDepth1);
-                resolveParticleCollision(p2, normal, penetrationDepth2);
-                resolveParticleCollision(p3, normal, penetrationDepth3);
+                resolveParticleCollision(p1, normal, penetrationDepth1, deltaTime, StaticFriction, KineticFriction);
+                resolveParticleCollision(p2, normal, penetrationDepth2, deltaTime, StaticFriction, KineticFriction);
+                resolveParticleCollision(p3, normal, penetrationDepth3, deltaTime, StaticFriction, KineticFriction);
             }
         }
     }
@@ -323,12 +290,16 @@ void NewCollision::resolveCollisionWithOutBVH(
 void NewCollision::resolveParticleCollision(
     Particle& particle,
     const glm::vec3& normal,
-    float penetrationDepth) {
+    float penetrationDepth,
+    float deltaTime, float Fs, float Fk) {
 
     // std::cout << "Resolving particle collision" << std::endl;
 
     const float repulsionStrength = 500.0f;
     const float restitution = 0.5f;
+
+    const float staticFrictionCoeff = Fs;
+    const float kineticFrictionCoeff = Fk;
 
     // Calculate velocity
     glm::vec3 velocity = particle.getPosition() - particle.getPreviousPosition();
@@ -336,11 +307,31 @@ void NewCollision::resolveParticleCollision(
     // Apply repulsion force
     glm::vec3 repulsionForce = normal * (repulsionStrength * std::abs(penetrationDepth));
     particle.applyForce(repulsionForce);
+    particle.update(deltaTime);
 
     // Apply restitution
     glm::vec3 velocityNormal = glm::dot(velocity, normal) * normal;
-    glm::vec3 velocityTangent = velocity - velocityNormal;
+    //std::cout << "normal: { " << normal.x << ", " << normal.y << ", " << normal.z << "}\n";
+    //std::cout << "velocityNormal: { " << velocity.x << ", " << velocity.y << ", " << velocity.z << "}\n";
+    glm::vec3 velocityTangent = velocityNormal - velocity;
     glm::vec3 newVelocity = velocityTangent - velocityNormal * restitution;
+
+    // Friction calculation
+    float normalForce = glm::length(repulsionForce);
+    glm::vec3 frictionDirection = glm::length(velocityTangent) > 0.0001f
+        ? glm::normalize(velocityTangent)
+        : glm::vec3(0.0f);
+
+    // Choose between static and kinetic friction
+    float frictionCoeff = glm::length(velocityTangent) < 0.0001f
+        ? staticFrictionCoeff
+        : kineticFrictionCoeff;
+
+    // Calculate friction force
+    glm::vec3 frictionForce = -frictionDirection * (normalForce * frictionCoeff);
+
+    // Apply friction
+    newVelocity += frictionForce / particle.getMass();
 
     // Update particle
     particle.setPreviousPosition(particle.getPosition() - newVelocity);
@@ -348,27 +339,6 @@ void NewCollision::resolveParticleCollision(
     // Correct position if there's penetration
     if (penetrationDepth < 0.0f) {
         particle.setPosition(particle.getPosition() - normal * penetrationDepth);
-    }
-}
-
-void NewCollision::traverseBothBVHs(BVHNode* nodeA, BVHNode* nodeB, std::vector<std::pair<GLuint, GLuint>>& potentialPairs) {
-    if (!nodeA || !nodeB) return;
-
-    if (!nodeA->aabb.intersects(nodeB->aabb)) return;
-
-    if (nodeA->isLeaf() && nodeB->isLeaf()) {
-        // Add all triangle pairs between the two leaves
-        for (auto i : nodeA->triangleIndices)
-            for (auto j : nodeB->triangleIndices)
-                potentialPairs.emplace_back(i, j);
-    } else {
-        if (nodeA->isLeaf()) {
-            traverseBothBVHs(nodeA, nodeB->left, potentialPairs);
-            traverseBothBVHs(nodeA, nodeB->right, potentialPairs);
-        } else {
-            traverseBothBVHs(nodeA->left, nodeB, potentialPairs);
-            traverseBothBVHs(nodeA->right, nodeB, potentialPairs);
-        }
     }
 }
 

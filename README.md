@@ -1,7 +1,20 @@
+<<<<<<< HEAD
 # Knit Fabric Simulation Documentation
 
 ## Overview
 This project implements a physically-based knit fabric simulation using OpenGL. The simulation features cloth dynamics, collision detection, and advanced rendering capabilities.
+=======
+# Fabric Simulation
+
+## Overview
+This project implements a physically-based knit fabric simulation using OpenGL. The simulation features material based cloth dynamics, collision detection, procedural fur generation and texture mapping, and advanced rendering capabilities.
+
+<p align="center">
+  <img src="images/furmap.png" width="30%">
+  <img src="images/Drape.png" width="30%">
+  <img src="images/linen.png" width="30%">
+</p>
+>>>>>>> origin/main
 
 ## Core Components
 
@@ -62,22 +75,43 @@ Components:
   - Spring stiffness
   - Damping
   - Gravity
+<<<<<<< HEAD
+=======
+  - Friction
+>>>>>>> origin/main
 
 ### 2. Collision Handling
 - Object-cloth collisions
 - Self-collisions
 - Multiple collision resolution strategies
 
+<<<<<<< HEAD
 ### 3. User Interface
+=======
+### 3. Fur Simulation
+- Procedural Fur Generation
+- Texture Mapping onto Fur
+
+### 4. User Interface
+>>>>>>> origin/main
 - ImGui-based interface
 - Camera controls
 - Simulation parameters adjustment
 
+<<<<<<< HEAD
 ### 4. Graphics Features
+=======
+### 5. Graphics Features
+>>>>>>> origin/main
 - OpenGL 3.3 core profile
 - Shader-based rendering
 - Model loading via Assimp
 - Texture support
+<<<<<<< HEAD
+=======
+- Blinn-Phong lighting model
+- Material selection for realistic shading
+>>>>>>> origin/main
 
 ## Usage
 
