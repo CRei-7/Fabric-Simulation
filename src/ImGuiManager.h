@@ -54,6 +54,7 @@ public:
 
     void SetSphere(bool* ptr) { SelectSphere = ptr; }
     void SetCube(bool* ptr) { SelectCube = ptr; }
+    void SetTable(bool* ptr) { SelectTable = ptr; }
 
     int GetFabricTypeUniform();
 
@@ -87,6 +88,7 @@ private:
 
     bool* SelectSphere;
     bool* SelectCube;
+    bool* SelectTable;
 
     int currentMaterialIndex = 0;
     //int* fabricType;

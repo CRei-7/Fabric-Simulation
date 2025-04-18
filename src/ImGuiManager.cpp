@@ -146,10 +146,11 @@ void ImGuiManager::Render()
         ImGui::BeginGroup();
         ImGui::TextColored(ImVec4(0.4f, 0.7f, 1.0f, 1.0f), "Objects");
         ImGui::Separator();
-        if (SelectCube && SelectSphere) {
+        if (SelectCube && SelectSphere && SelectTable) {
             ImGui::Checkbox("Show Cube", SelectCube);
             ImGui::SameLine();
             ImGui::Checkbox("Show Sphere", SelectSphere);
+            ImGui::Checkbox("Show Table", SelectTable);
 
             if (*SelectCube) *SelectSphere = false;
             if (*SelectSphere) *SelectCube = false;

@@ -60,7 +60,7 @@ bool Application::Init()
     toggle_wind = false;
     toggleClothOrientation = true;
     clothNeedsReset = false;
-    ShowFur = true;
+    ShowFur = false;
     StartSimulation = false;
     ShowParticle = false;
     ShowSpring = false;
@@ -104,6 +104,7 @@ bool Application::Init()
 
     imgui_manager.SetCube(&SelectCube);
     imgui_manager.SetSphere(&SelectSphere);
+    imgui_manager.SetTable(&SelectTable);
 
     imgui_manager.SetTexturePath(&filename);
 
@@ -149,7 +150,7 @@ void Application::SetupOpenGL() {
     deltaTime = 0.01f;
     lastFrame = 0.0f;
 
-    table = new Table(0.5f, 0.05f, 0.05f, 0.5f, -0.2f, 36, glm::vec3(0.0f, 0.0f, 0.5f), "../textures/wood.jpg");
+    table = new Table(0.5f, 0.05f, 0.05f, 0.5f, -0.2f, 36, glm::vec3(0.0f, 0.0f, 0.5f), "./textures/wood.jpg");
 }
 
 void Application::processInput(GLFWwindow* window) {
@@ -281,6 +282,11 @@ void Application::generateFurStrands(const std::vector<Particle>& particles, int
     int furLayers = 10; // Number of layers for the fur
     float furLength = 0.025f; // Length of each fur strand
 
+    float baseThickness = 0.012f;
+    float tipThickness = 0.002f;
+
+    float randomnessFalloff = 2.5f;
+
     furVertices.clear();
     furIndices.clear();
     furTexCoords.clear();
@@ -311,8 +317,8 @@ void Application::generateFurStrands(const std::vector<Particle>& particles, int
         glm::vec3 v2 = vertices[indices[i + 2]];
 
         glm::vec2 t0 = texCoords[indices[i]];
-        glm::vec2 t1 = texCoords[indices[i+1]];
-        glm::vec2 t2 = texCoords[indices[i+2]];
+        glm::vec2 t1 = texCoords[indices[i + 1]];
+        glm::vec2 t2 = texCoords[indices[i + 2]];
 
         // Calculate the normal of the triangle
         glm::vec3 edge1 = v1 - v0;
@@ -321,7 +327,7 @@ void Application::generateFurStrands(const std::vector<Particle>& particles, int
 
         // Generate interpolated points across the triangle
         for (float u = 0.0f; u <= 1.0f; u += furDensity) {
-            for (float v = 0.0f; v <= ( 1.0f - u ); v += furDensity) {
+            for (float v = 0.0f; v <= (1.0f - u); v += furDensity) {
                 // Barycentric coordinates
                 const float w = 1.0f - u - v;
 
@@ -333,11 +339,24 @@ void Application::generateFurStrands(const std::vector<Particle>& particles, int
 
                 // Generate fur strands along the normal
                 for (int layer = 0; layer < furLayers; ++layer) {
-                    float t = static_cast<float>(layer) / furLayers;
+                    float t_linear = static_cast<float>(layer) / furLayers;
+                    float t = pow(t_linear, 3.0f);
+
+                    float randomnessScale = 1.0f - pow(t_linear, randomnessFalloff);
+
+                    float thickness = glm::mix(baseThickness, tipThickness, t_linear);
+
                     glm::vec3 furPos = basePoint + normal * furLength * t;
 
                     // Add precomputed randomness to the fur direction
-                    furPos += randomOffsets[(i / 3) * furLayers + layer] * t;
+                    //furPos += randomOffsets[(i / 3) * furLayers + layer] * t;
+                    glm::vec3 offset = randomOffsets[(i / 3) * furLayers + layer];
+                    furPos += offset * randomnessScale;
+                    furPos += normal * thickness * (1.0f - t_linear);
+
+                    //if (t_linear > 0.5f && static_cast<float>(rand()) / RAND_MAX > 0.7f) {
+                    //    continue; // Skip some vertices in upper half
+                    //}
 
                     furVertices.push_back(furPos);
                     furTexCoords.push_back(baseTexCoord);
@@ -356,18 +375,26 @@ void Application::generateFurStrands(const std::vector<Particle>& particles, int
 
 void Application::setupCloth() {
     // Grid parameters
-    int column = 30; // Number of columns
-    int row = 30;    // Number of rows
+    float clothWidth = 1.0f;  // Total width of the cloth
+    float clothHeight = 1.0f; // Total height of the cloth
+
+    // Distance between particles
     float disX = 0.05f; // Distance between particles in x direction
     float disY = 0.05f; // Distance between particles in y direction
-    float initialY = 0.3f; // Y-coordinate for the top pinned particle
-// <<<<<<< HEAD
-//     glm::vec3 Offset(-0.1f, 0.0f, 0.0f); // Offset for initial position
-//     float k = 50.0f; // Structural Spring constant
-//     float shearK = 10.5f; // Shear spring constant
-// =======
-    glm::vec3 Offset(-0.5f, 0.0f, 0.0f); // Offset for initial position
-// >>>>>>> origin/main
+
+    float initialY = 0.3f; // Y-coordinate for the top pinned particles
+
+    // Calculate number of rows and columns based on cloth dimensions and particle distance
+    int column = static_cast<int>(clothWidth / disX) + 1;  // +1 because we need particles at edges
+    int row = static_cast<int>(clothHeight / disY) + 1;    // +1 because we need particles at edges
+
+    // Recalculate actual cloth dimensions (might be slightly different due to integer division)
+    float actualClothWidth = (column - 1) * disX;
+    float actualClothHeight = (row - 1) * disY;
+
+    // Calculate offset to center the cloth along y-axis
+    glm::vec3 Offset(-actualClothWidth / 2.0f, 0.0f, 0.12f); // Centered offset for initial position
+
 
     gravity = -0.05f;
 
@@ -396,8 +423,8 @@ void Application::setupCloth() {
         for (int i = 0; i < column; ++i) {
             for (int j = 0; j < row; ++j) {
                 float xPos = i * disX + Offset.x;
-                float zPos = j * disY; // Use disY for Z direction when orientation is different
-                bool staticParticle = false; // j == 0; //First row static in this orientation
+                float zPos = j * disY + Offset.z; // Use disY for Z direction when orientation is different
+                bool staticParticle = false;// j == 0; //First row static in this orientation
                 particles.emplace_back(glm::vec3(xPos, 0.15f, zPos), staticParticle);
             }
         }
@@ -467,7 +494,7 @@ void Application::setupClothMesh(const std::vector<Particle>& particles, int col
 
             // Calculate texture coordinates based on grid position
             float u = static_cast<float>(i) / (column - 1);
-            float v = static_cast<float>(j) / (row - 1);
+            float v = 1.0f - static_cast<float>(j) / (row - 1);
             texCoords.push_back(glm::vec2(u, v));
         }
     }
@@ -638,7 +665,7 @@ void Application::calculateNormals() {
 
 void Application::renderClothMesh(GLuint shaderProgram, const std::vector<Particle>& particles, const glm::mat4& view, const glm::mat4& projection) {
     glUseProgram(shaderProgram);
-    glUniform1i(glGetUniformLocation(shaderProgram, "useTexture"), 0);
+    //glUniform1i(glGetUniformLocation(shaderProgram, "useTexture"), 0);
     // Set model, view, projection matrices
     glm::mat4 model = glm::mat4(1.0f);
     GLuint modelLoc = glGetUniformLocation(shaderProgram, "model");
@@ -683,6 +710,11 @@ void Application::renderClothMesh(GLuint shaderProgram, const std::vector<Partic
         int furLayers = 10; // Number of layers for the fur
         float furLength = 0.025f; // Length of each fur strand
 
+        float baseThickness = 0.012f;
+        float tipThickness = 0.002f;
+
+        float randomnessFalloff = 2.5f; // Controls how quickly randomness reduces along length
+
 #pragma omp parallel for
         for (int i = 0; i < indices.size(); i += 3) {
             // Get the three vertices of the triangle
@@ -716,11 +748,24 @@ void Application::renderClothMesh(GLuint shaderProgram, const std::vector<Partic
 
                     // Generate fur strands along the normal
                     for (int layer = 0; layer < furLayers; ++layer) {
-                        float t = static_cast<float>(layer) / furLayers;
+                        float t_linear = static_cast<float>(layer) / furLayers;
+                        float t = pow(t_linear, 3.0f);
+
+                        float randomnessScale = 1.0f - pow(t_linear, randomnessFalloff);
+
+                        float thickness = glm::mix(baseThickness, tipThickness, t_linear);
+
                         glm::vec3 furPos = basePoint + normal * furLength * t;
 
                         // Add precomputed randomness to the fur direction
-                        furPos += randomOffsets[(i / 3) * furLayers + layer] * t;
+                        //furPos += randomOffsets[(i / 3) * furLayers + layer] * t;
+                        glm::vec3 offset = randomOffsets[(i / 3) * furLayers + layer];
+                        furPos += offset * randomnessScale;
+                        furPos += normal * thickness * (1.0f - t_linear);
+
+                        //if (t_linear > 0.5f && static_cast<float>(rand()) / RAND_MAX > 0.7f) {
+                        //    continue; // Skip some vertices in upper half
+                        //}
 
 #pragma omp critical
                         {
@@ -815,18 +860,6 @@ void Application::renderClothMesh(GLuint shaderProgram, const std::vector<Partic
     glFrontFace(GL_CW);
     glCullFace(GL_BACK);  // Cull the back faces, render front faces
 
-    // std::cout<<"currentCollision: "<<currentCollision<<std::endl;
-
-    // // Prepare a vector to hold the result
-    //     std::vector<GLuint> difference;
-
-    //     // Compute the difference
-    //     std::set_difference(
-    //         indices.begin(), indices.end(),
-    //         collidingIndices.begin(), collidingIndices.end(),
-    //         std::back_inserter(difference)
-    //     );
-
     GLint colorLoc = glGetUniformLocation(shaderProgram, "Color");
     glm::vec3 frontColor(1.0f, 1.0f, 1.0f);  // Color for the front face
     glUniform3fv(colorLoc, 1, glm::value_ptr(frontColor));
@@ -852,13 +885,6 @@ void Application::renderClothMesh(GLuint shaderProgram, const std::vector<Partic
     // Render fur with a different color
     if (ShowFur && !furVertices.empty() && !furIndices.empty()) {
         glBindVertexArray(furVAO);
-        //glm::vec3 furColor(1.0f, 0.0f, 0.0f);  // Red fur
-
-        // Set fur to not use texture
-        //glUniform1i(useTextureLoc, 0);
-        //glUniform3fv(colorLoc, 1, glm::value_ptr(furColor));
-
-        //glDrawElements(GL_LINES, furIndices.size(), GL_UNSIGNED_INT, 0);
 
         // Enable alpha blending for fur transparency
         glEnable(GL_BLEND);
@@ -879,10 +905,6 @@ void Application::renderClothMesh(GLuint shaderProgram, const std::vector<Partic
         glm::vec3 furColor(0.95f, 0.95f, 0.95f); // Slightly off-white
         glUniform3fv(colorLoc, 1, glm::value_ptr(furColor));
 
-
-        // Set uniform for color (white to allow full texture color)
-        //glUniform3fv(colorLoc, 1, glm::value_ptr(glm::vec3(1.0f)));
-
         // Disable back face culling for fur (render both sides)
         glDisable(GL_CULL_FACE);
 
@@ -902,20 +924,6 @@ void Application::MainLoop()
 {
     setupCloth();
 
-    // Cube.SetupCube(0.4f, glm::vec3(0.0f, -0.2f, 0.5f));
-
-    // Object Sphere;
-    // Adjust based on desired stiffness
-    // Sphere.SetupSphere(0.3f, glm::vec3(0.0, -0.2, 0.5));
-
-    //Object Cube;
-    //Cube.SetupCube(0.4f, glm::vec3(0.0f, -0.2f, 0.5f));
-
-    //Object Sphere;
-    //Sphere.SetupSphere(0.3f, glm::vec3(0.0, -0.2, 0.5));
-
-    // ClothModelCollision::validateBVH(modelBVH);
-    // ClothModelCollision::validateClothParticles(particles);
     while (!glfwWindowShouldClose(window))
     {
 
@@ -945,18 +953,18 @@ void Application::MainLoop()
 
         // Check if cloth needs to be reset due to orientation toggle
         if (clothNeedsReset) {
-                    particles.clear();
-                    springs.clear();
-                    setupCloth();
-                    clothNeedsReset = false;
-                }
+            particles.clear();
+            springs.clear();
+            setupCloth();
+            clothNeedsReset = false;
+        }
         glfwPollEvents();
         imgui_manager.BeginFrame();
 
         imgui_manager.SetupMenuBar(window, &should_close);
         if (should_close)
             glfwSetWindowShouldClose(window, true);
-            //imgui_manager.RenderWireframeToggle();
+        //imgui_manager.RenderWireframeToggle();
         imgui_manager.Render();
         imgui_manager.EndFrame();
 
@@ -969,15 +977,18 @@ void Application::MainLoop()
         glClear(GL_COLOR_BUFFER_BIT);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);//clear the depth buffer at each iteration
 
+        //activates the shader
+        glUseProgram(shader->shaderProgram);
+
         // use imported model shaders
         // importedModelShader->use();
 
         GLuint lightColorLoc = glGetUniformLocation(shader->shaderProgram, "lightColor");
-        // glUniform3fv(lightColorLoc, 1, glm::value_ptr(lightColor));
+        glUniform3fv(lightColorLoc, 1, glm::value_ptr(lightColor));
 
         //for perspective transformation
         glm::mat4 clothModel = glm::mat4(1.0f);//transformations we'd like to apply to all object's vertices to the global world space
-        clothModel = glm::translate(clothModel, glm::vec3(0.0f,-0.2f, 0.5f));
+        clothModel = glm::translate(clothModel, glm::vec3(0.0f, -0.2f, 0.5f));
         clothModel = glm::scale(clothModel, glm::vec3(0.05f));
         glm::mat4 view = glm::mat4(1.0f);//to set the camera location
         glm::mat4 projection = glm::mat4(1.0f);//for perspective projection
@@ -991,51 +1002,21 @@ void Application::MainLoop()
 
         projection = glm::perspective(glm::radians(fov), (float)display_w / (float)display_h, 0.1f, 1000.0f);
 
-        // importedModelShader->setMat4("projection", projection);
-        // importedModelShader->setMat4("view", view);
-        // importedModelShader->setMat4("model", clothModel);
-
-
-        // ourModel->drawBVH(*importedModelShader, false);
-        // ourModel->Draw(*importedModelShader, imgui_manager.wireframeMode);
-
-// <<<<<<< HEAD
-//         shader->use();
-//         shader->setVec3("lightColor", lightColor); // Set lightColor for the cloth's shader
-//         shader->setVec3("lightPos", lightPos);
-//         shader->setVec3("viewPos", cameraPos);
-//         //activates the shader
-//         glUseProgram(shader->shaderProgram);
-
         glm::mat4 model = glm::mat4(1.0f);//transformations we'd like to apply to all cloth
 
-//         // Update to the wind direction periodically
-//         windTimer += deltaTime;
-//         if (windTimer >= windChangeInterval) {
-//             windDirection = getRandomWindDirection(); //Randomizes the wind direction
-//             windTimer = 0.0f; //Timer reset
-//         }
-
-//         // CollisionHandler::checkAndResolveCollisions(particles, *ourModel);
-//         for (auto& particle : particles) {
-//             //resolveCollision(particle, Cube   );
-//             for (int i = 0; i < 20; ++i) {
-//                 // Collision::resolveCollision(particle, Sphere, deltaTime);
-// =======
         if (StartSimulation) {
             // Update to the wind direction periodically
             windTimer += deltaTime;
             if (windTimer >= windChangeInterval) {
                 windDirection = getRandomWindDirection(); //Randomizes the wind direction
                 windTimer = 0.0f; //Timer reset
-// >>>>>>> origin/main
             }
 
 
             clothBVH->refit();
             //std::cout << " Without BVH: " << NewCollision::collisionChecks << "\n";
             //std::cout << " - With BVH: " << NewCollision::bvhCollisionChecks << "\n";
-            if(currentObject)
+            if (currentObject)
                 NewCollision::resolveCollision(particles, clothBVH, indices, *currentObject, deltaTime, collidingIndices, StaticFrictionCoefficient, KineticFrictionCoefficient);
             //NewCollision::resolveCollisionWithOutBVH(particles, indices, Sphere, deltaTime, collidingIndices);
 
@@ -1063,14 +1044,14 @@ void Application::MainLoop()
 
                 particle.applyForce(glm::vec3(0.0f, gravity, 0.0f)); // Apply gravity
                 particle.update(deltaTime);
-                if(ShowParticle)
+                if (ShowParticle)
                     particle.render(shader->shaderProgram, view, projection);
             }
 
             // Update and render springs
             for (auto& spring : springs) {
                 spring.update();
-                if(ShowSpring)
+                if (ShowSpring)
                     spring.render(shader->shaderProgram, model, view, projection);
             }
         }
@@ -1088,26 +1069,16 @@ void Application::MainLoop()
             }
         }
 
-// <<<<<<< HEAD
-        // Resolve collisions with the table after updating particles
-        CollisionDetection::resolveClothTableCollisions(particles, *table);
-        // Update and render springs
-        // for (auto& spring : springs) {
-        //     spring.update();
-        //     spring.render(shader->shaderProgram, model, view, projection);
-        // }
-
-        // // Cube.render(shader->shaderProgram,   view, projection, lightPos, cameraPos);
-        // // Sphere.render(shader->shaderProgram, view, projection, lightPos, cameraPos);
-// =======
-        //Cube.render(shader->shaderProgram, view, projection, lightPos, cameraPos, color);
-        if(currentObject)
+        if (currentObject)
             currentObject->render(shader->shaderProgram, view, projection, lightPos, cameraPos, color);
-// >>>>>>> origin/main
 
+        if (SelectTable) {
+            CollisionDetection::resolveClothTableCollisions(particles, *table);
+            table->render(tableShader->shaderProgram, view, projection);
+        }
+        
         renderClothMesh(shader->shaderProgram, particles, view, projection);
         // Render the table
-        table->render(tableShader->shaderProgram, view, projection);
 
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 

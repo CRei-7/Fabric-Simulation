@@ -142,6 +142,7 @@ private:
     std::unique_ptr<Object> currentObject;
     bool SelectCube = false;
     bool SelectSphere = false;
+    bool SelectTable = false;
 };
 
 #endif // APPLICATION_H

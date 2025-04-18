@@ -13,12 +13,13 @@ void BVHNode::refit(const std::vector<Particle>& particles) {
         aabb.max = glm::vec3(-std::numeric_limits<float>::max());
         for (size_t i = 0; i < triangleIndices.size(); i += 3) {
             const glm::vec3& v1 = particles[triangleIndices[i]].getPosition();
-            const glm::vec3& v2 = particles[triangleIndices[i+1]].getPosition();
-            const glm::vec3& v3 = particles[triangleIndices[i+2]].getPosition();
+            const glm::vec3& v2 = particles[triangleIndices[i + 1]].getPosition();
+            const glm::vec3& v3 = particles[triangleIndices[i + 2]].getPosition();
             aabb.min = glm::min(aabb.min, glm::min(v1, glm::min(v2, v3)));
             aabb.max = glm::max(aabb.max, glm::max(v1, glm::max(v2, v3)));
         }
-    } else {
+    }
+    else {
         left->refit(particles);
         right->refit(particles);
         aabb.min = glm::min(left->aabb.min, right->aabb.min);
@@ -50,20 +51,21 @@ BVHNode* BVH::build(const std::vector<GLuint>& triangleIndices) {
     AABB centroidAABB = computeCentroidAABB(triangleIndices);
     glm::vec3 extent = centroidAABB.max - centroidAABB.min;
     int axis = (extent.x > extent.y && extent.x > extent.z) ? 0 :
-               (extent.y > extent.z) ? 1 : 2;
+        (extent.y > extent.z) ? 1 : 2;
     float splitValue = (centroidAABB.min[axis] + centroidAABB.max[axis]) * 0.5f;
 
     std::vector<GLuint> leftIndices, rightIndices;
     for (size_t i = 0; i < triangleIndices.size(); i += 3) {
         glm::vec3 centroid = (
             particles[triangleIndices[i]].getPosition() +
-            particles[triangleIndices[i+1]].getPosition() +
-            particles[triangleIndices[i+2]].getPosition()
-        ) / 3.0f;
+            particles[triangleIndices[i + 1]].getPosition() +
+            particles[triangleIndices[i + 2]].getPosition()
+            ) / 3.0f;
         if (centroid[axis] < splitValue) {
-            leftIndices.insert(leftIndices.end(), triangleIndices.begin()+i, triangleIndices.begin()+i+3);
-        } else {
-            rightIndices.insert(rightIndices.end(), triangleIndices.begin()+i, triangleIndices.begin()+i+3);
+            leftIndices.insert(leftIndices.end(), triangleIndices.begin() + i, triangleIndices.begin() + i + 3);
+        }
+        else {
+            rightIndices.insert(rightIndices.end(), triangleIndices.begin() + i, triangleIndices.begin() + i + 3);
         }
     }
 
@@ -88,9 +90,9 @@ AABB BVH::computeCentroidAABB(const std::vector<GLuint>& triangleIndices) {
     for (size_t i = 0; i < triangleIndices.size(); i += 3) {
         glm::vec3 centroid = (
             particles[triangleIndices[i]].getPosition() +
-            particles[triangleIndices[i+1]].getPosition() +
-            particles[triangleIndices[i+2]].getPosition()
-        ) / 3.0f;
+            particles[triangleIndices[i + 1]].getPosition() +
+            particles[triangleIndices[i + 2]].getPosition()
+            ) / 3.0f;
         aabb.min = glm::min(aabb.min, centroid);
         aabb.max = glm::max(aabb.max, centroid);
     }
@@ -106,7 +108,8 @@ void BVHNode::query(const AABB& queryAABB, std::vector<size_t>& results) const {
     if (isLeaf()) {
         // If leaf node, add all triangle indices
         results.insert(results.end(), triangleIndices.begin(), triangleIndices.end());
-    } else {
+    }
+    else {
         // Recurse into children
         left->query(queryAABB, results);
         right->query(queryAABB, results);
@@ -121,6 +124,6 @@ void BVH::query(const AABB& queryAABB, std::vector<size_t>& results) const {
 
 bool BVH::checkAABBOverlap(const AABB& a, const AABB& b) {
     return (a.min.x <= b.max.x && a.max.x >= b.min.x) &&
-           (a.min.y <= b.max.y && a.max.y >= b.min.y) &&
-           (a.min.z <= b.max.z && a.max.z >= b.min.z);
+        (a.min.y <= b.max.y && a.max.y >= b.min.y) &&
+        (a.min.z <= b.max.z && a.max.z >= b.min.z);
 }

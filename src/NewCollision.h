@@ -35,9 +35,9 @@ public:
         float StaticFriction, float KineticFriction
     );
     static void traverseBVH(
-             BVHNode* node,
-             const Object& object,
-             std::vector<GLuint>& potentialTriangles);
+        BVHNode* node,
+        const Object& object,
+        std::vector<GLuint>& potentialTriangles);
 
 
 private:
