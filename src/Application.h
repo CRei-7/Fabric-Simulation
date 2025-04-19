@@ -40,6 +40,13 @@ public:
 
     void TextureSetup();
 
+    void startBakingSimulation();
+    void stopBakingSimulation();
+    void playBakedSimulation();
+    void stopPlayingBakedSimulation();
+    void saveBakedSimulation(const std::string& filename);
+    bool loadBakedSimulation(const std::string& filename);
+
 private:
     Table* table;
     GLFWwindow* window;
@@ -76,6 +83,7 @@ private:
 
     float deltaTime;//time between current and last frame
     float lastFrame;
+    float defaultTime;
 
     void SetupOpenGL();
     void processInput(GLFWwindow* window);
@@ -143,6 +151,31 @@ private:
     bool SelectCube = false;
     bool SelectSphere = false;
     bool SelectTable = false;
+
+    struct SimulationFrame {
+        std::vector<glm::vec3> particlePositions;
+        std::vector<glm::vec3> meshNormals;
+    };
+
+    bool bakingSimulation = false;
+    bool playingBakedSimulation = false;
+    std::vector<SimulationFrame> bakedFrames;
+    size_t currentBakedFrame = 0;
+    float simulationTime = 0.0f;
+    float recordingDuration = 5.0f; // Default recording duration in seconds
+    float playbackSpeed = 1.0f;
+    bool showBakingProgress = false;
+    size_t bakedFramesSize = 0;
+
+    bool useCustomDeltaTime = false;
+    float customDeltaTime = 0.016f;
+
+    float clothWidth = 1.0f;  // Total width of the cloth
+    float clothHeight = 1.0f; // Total height of the cloth
+
+    // Distance between particles
+    float disX = 0.05f; // Distance between particles in x direction
+    float disY = 0.05f; // Distance between particles in y direction
 };
 
 #endif // APPLICATION_H

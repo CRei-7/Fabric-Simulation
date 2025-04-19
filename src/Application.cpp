@@ -106,6 +106,32 @@ bool Application::Init()
     imgui_manager.SetSphere(&SelectSphere);
     imgui_manager.SetTable(&SelectTable);
 
+    imgui_manager.DeltaTimeFlag(&useCustomDeltaTime);
+    imgui_manager.SetDeltaTime(&customDeltaTime);
+    imgui_manager.ResetCloth(&clothNeedsReset);
+
+    imgui_manager.SetDimensions(&clothWidth, &clothHeight);
+    imgui_manager.SetSeparation(&disX, &disY);
+
+    imgui_manager.SetSimulationBakingData(&bakingSimulation,
+        &playingBakedSimulation,
+        &recordingDuration,
+        &playbackSpeed,
+        &showBakingProgress,
+        &simulationTime,
+        &currentBakedFrame,
+        &bakedFramesSize
+    );
+
+    imgui_manager.SetSimulationCallbacks(
+        [this]() { this->startBakingSimulation(); },
+        [this]() { this->stopBakingSimulation(); },
+        [this]() { this->playBakedSimulation(); },
+        [this]() { this->stopPlayingBakedSimulation(); },
+        [this](const std::string& filename) { this->saveBakedSimulation(filename); },
+        [this](const std::string& filename) { return this->loadBakedSimulation(filename); }
+    );
+
     imgui_manager.SetTexturePath(&filename);
 
     std::cout << "GPU: " << glGetString(GL_RENDERER) << std::endl;
@@ -116,8 +142,8 @@ bool Application::Init()
     stbi_set_flip_vertically_on_load(true);
 
     glEnable(GL_DEPTH_TEST);
-    shader = new Shader("../shaders/VertShader.vert", "../shaders/FragShader.frag");
-    tableShader = new Shader("../shaders/tableVert.vert", "../shaders/tableFrag.frag");
+    shader = new Shader("./shaders/VertShader.vert", "./shaders/FragShader.frag");
+    tableShader = new Shader("./shaders/tableVert.vert", "./shaders/tableFrag.frag");
     // importedModelShader = new Shader("../shaders/modelVertex.vert", "../shaders/modelFragment.frag");
     // std::cout << "Loading models" << std::endl;
        // // load models
@@ -147,7 +173,7 @@ void Application::SetupOpenGL() {
     lastY = display_h / 2.0;
     fov = 45.0f;
 
-    deltaTime = 0.01f;
+    defaultTime = deltaTime = 0.01f;
     lastFrame = 0.0f;
 
     table = new Table(0.5f, 0.05f, 0.05f, 0.5f, -0.2f, 36, glm::vec3(0.0f, 0.0f, 0.5f), "./textures/wood.jpg");
@@ -176,7 +202,7 @@ void Application::processInput(GLFWwindow* window) {
     }*/
 
     //For keyboard movement
-    float cameraSpeed = 2.5f * deltaTime; //speed of camera movement
+    float cameraSpeed = 2.5f * defaultTime; //speed of camera movement
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
         cameraPos += cameraSpeed * cameraFront;
     if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
@@ -374,14 +400,6 @@ void Application::generateFurStrands(const std::vector<Particle>& particles, int
 }
 
 void Application::setupCloth() {
-    // Grid parameters
-    float clothWidth = 1.0f;  // Total width of the cloth
-    float clothHeight = 1.0f; // Total height of the cloth
-
-    // Distance between particles
-    float disX = 0.05f; // Distance between particles in x direction
-    float disY = 0.05f; // Distance between particles in y direction
-
     float initialY = 0.3f; // Y-coordinate for the top pinned particles
 
     // Calculate number of rows and columns based on cloth dimensions and particle distance
@@ -393,7 +411,7 @@ void Application::setupCloth() {
     float actualClothHeight = (row - 1) * disY;
 
     // Calculate offset to center the cloth along y-axis
-    glm::vec3 Offset(-actualClothWidth / 2.0f, 0.0f, 0.12f); // Centered offset for initial position
+    glm::vec3 Offset(-actualClothWidth / 2.0f, 0.0f, -actualClothHeight/2 + 0.5f); // Centered offset for initial position
 
 
     gravity = -0.05f;
@@ -919,6 +937,139 @@ void Application::renderClothMesh(GLuint shaderProgram, const std::vector<Partic
     glUseProgram(0);
 }
 
+void Application::startBakingSimulation() {
+    if (!bakingSimulation && !playingBakedSimulation) {
+        bakedFrames.clear();
+        currentBakedFrame = 0;
+        simulationTime = 0.0f;
+        bakingSimulation = true;
+        StartSimulation = true;
+        bakedFramesSize = 0;
+
+        particles.clear();
+        springs.clear();
+        setupCloth();
+
+        std::cout << "Started baking simulation for " << recordingDuration << " seconds..." << std::endl;
+    }
+}
+
+void Application::stopBakingSimulation() {
+    if (bakingSimulation) {
+        bakingSimulation = false;
+        bakedFramesSize = bakedFrames.size();
+        std::cout << "Finished baking simulation. Recorded " << bakedFrames.size() << " frames." << std::endl;
+    }
+}
+
+void Application::playBakedSimulation() {
+    if (bakedFrames.empty()) {
+        std::cout << "Error: No recorded simulation available to play." << std::endl;
+        return;
+    }
+    if (!bakingSimulation && !playingBakedSimulation) {
+        playingBakedSimulation = true;
+        currentBakedFrame = 0;
+        simulationTime = 0.0f;
+        StartSimulation = true;
+
+        particles.clear();
+        springs.clear();
+        setupCloth();
+        std::cout << "Playing baked simulation..." << std::endl;
+    }
+}
+
+void Application::stopPlayingBakedSimulation() {
+    if (playingBakedSimulation) {
+        playingBakedSimulation = false;
+        std::cout << "Stopped playing baked simulation." << std::endl;
+    }
+}
+
+void Application::saveBakedSimulation(const std::string& Baked_filename) {
+    if (bakedFrames.empty()) {
+        std::cout << "No simulation to save." << std::endl;
+        return;
+    }
+
+    std::ofstream outFile(Baked_filename, std::ios::binary);
+    if (!outFile) {
+        std::cerr << "Failed to open file for writing: " << Baked_filename << std::endl;
+        return;
+    }
+
+    // Write number of frames
+    size_t frameCount = bakedFrames.size();
+    outFile.write(reinterpret_cast<const char*>(&frameCount), sizeof(frameCount));
+
+    // Write number of particles per frame
+    size_t particleCount = bakedFrames[0].particlePositions.size();
+    outFile.write(reinterpret_cast<const char*>(&particleCount), sizeof(particleCount));
+
+    // Write number of normals
+    size_t normalCount = bakedFrames[0].meshNormals.size();
+    outFile.write(reinterpret_cast<const char*>(&normalCount), sizeof(normalCount));
+
+    // Write each frame
+    for (const auto& frame : bakedFrames) {
+        // Write positions
+        outFile.write(reinterpret_cast<const char*>(frame.particlePositions.data()),
+            frame.particlePositions.size() * sizeof(glm::vec3));
+
+        // Write normals
+        outFile.write(reinterpret_cast<const char*>(frame.meshNormals.data()),
+            frame.meshNormals.size() * sizeof(glm::vec3));
+    }
+
+    outFile.close();
+    std::cout << "Saved simulation to " << Baked_filename << std::endl;
+}
+
+bool Application::loadBakedSimulation(const std::string& Baked_filename) {
+    std::ifstream inFile(Baked_filename, std::ios::binary);
+    if (!inFile) {
+        std::cerr << "Failed to open file for reading: " << Baked_filename << std::endl;
+        return false;
+    }
+
+    // Read number of frames
+    size_t frameCount;
+    inFile.read(reinterpret_cast<char*>(&frameCount), sizeof(frameCount));
+
+    // Read number of particles per frame
+    size_t particleCount;
+    inFile.read(reinterpret_cast<char*>(&particleCount), sizeof(particleCount));
+
+    // Read number of normals
+    size_t normalCount;
+    inFile.read(reinterpret_cast<char*>(&normalCount), sizeof(normalCount));
+
+    // Clear existing baked frames
+    bakedFrames.clear();
+    bakedFrames.resize(frameCount);
+
+    // Read each frame
+    for (size_t i = 0; i < frameCount; ++i) {
+        // Resize vectors in the frame
+        bakedFrames[i].particlePositions.resize(particleCount);
+        bakedFrames[i].meshNormals.resize(normalCount);
+
+        // Read positions
+        inFile.read(reinterpret_cast<char*>(bakedFrames[i].particlePositions.data()),
+            particleCount * sizeof(glm::vec3));
+
+        // Read normals
+        inFile.read(reinterpret_cast<char*>(bakedFrames[i].meshNormals.data()),
+            normalCount * sizeof(glm::vec3));
+    }
+
+    inFile.close();
+    std::cout << "Loaded simulation from " << Baked_filename << " with " << frameCount << " frames." << std::endl;
+    bakedFramesSize = bakedFrames.size();
+    return true;
+}
+
 // Main rendering loop
 void Application::MainLoop()
 {
@@ -946,8 +1097,13 @@ void Application::MainLoop()
         bool should_close = false;
         //for variable speed of movement
         float currentFrame = static_cast<float>(glfwGetTime());
-        deltaTime = currentFrame - lastFrame; //=0.016
+        float actualDeltaTime = currentFrame - lastFrame; //=0.016
         lastFrame = currentFrame;
+
+        if (useCustomDeltaTime)
+            deltaTime = customDeltaTime;
+        else
+            deltaTime = actualDeltaTime;
 
         processInput(window);
 
@@ -980,9 +1136,6 @@ void Application::MainLoop()
         //activates the shader
         glUseProgram(shader->shaderProgram);
 
-        // use imported model shaders
-        // importedModelShader->use();
-
         GLuint lightColorLoc = glGetUniformLocation(shader->shaderProgram, "lightColor");
         glUniform3fv(lightColorLoc, 1, glm::value_ptr(lightColor));
 
@@ -1005,54 +1158,150 @@ void Application::MainLoop()
         glm::mat4 model = glm::mat4(1.0f);//transformations we'd like to apply to all cloth
 
         if (StartSimulation) {
-            // Update to the wind direction periodically
-            windTimer += deltaTime;
-            if (windTimer >= windChangeInterval) {
-                windDirection = getRandomWindDirection(); //Randomizes the wind direction
-                windTimer = 0.0f; //Timer reset
-            }
+            if (bakingSimulation) {
+                SimulationFrame frame;
+                frame.particlePositions.reserve(particles.size());
 
-
-            clothBVH->refit();
-            //std::cout << " Without BVH: " << NewCollision::collisionChecks << "\n";
-            //std::cout << " - With BVH: " << NewCollision::bvhCollisionChecks << "\n";
-            if (currentObject)
-                NewCollision::resolveCollision(particles, clothBVH, indices, *currentObject, deltaTime, collidingIndices, StaticFrictionCoefficient, KineticFrictionCoefficient);
-            //NewCollision::resolveCollisionWithOutBVH(particles, indices, Sphere, deltaTime, collidingIndices);
-
-            for (auto& particle : particles) {
-                //resolveCollision(particle, Cube   );
-                //for (int i = 0; i < 20; ++i) {
-                    // Collision::resolveCollision(particle, Sphere, deltaTime);
-                //}
-
-                Collision::resolveSelfCollision(particle, particles); // Check self-collision
-
-                if (toggle_wind) {
-                    //Generates a random wind strength factor between -windOffsetSpeed and windOffsetSpeed
-                    float noise = windScale + ((static_cast<float>(rand()) / RAND_MAX) * 2.0f - 1.0f) * windOffsetSpeed;
-                    // Add turbulence and noise to wind
-                    float turbulence = sin(windTimer * 2.0f) * 0.1f;
-                    glm::vec3 windVariation = glm::vec3(
-                        turbulence * sin(particle.getPosition().x),
-                        turbulence * cos(particle.getPosition().y),
-                        turbulence * sin(particle.getPosition().z)
-                    );
-                    glm::vec3 wind = windDirection * noise + windVariation;
-                    particle.applyForce(wind);
+                for (const auto& particle : particles) {
+                    frame.particlePositions.push_back(particle.getPosition());
                 }
 
-                particle.applyForce(glm::vec3(0.0f, gravity, 0.0f)); // Apply gravity
-                particle.update(deltaTime);
-                if (ShowParticle)
-                    particle.render(shader->shaderProgram, view, projection);
-            }
+                calculateNormals();
+                frame.meshNormals = normals;
 
-            // Update and render springs
-            for (auto& spring : springs) {
-                spring.update();
-                if (ShowSpring)
-                    spring.render(shader->shaderProgram, model, view, projection);
+                bakedFrames.push_back(frame);
+
+                simulationTime += deltaTime;
+                if (simulationTime >= recordingDuration) {
+                    stopBakingSimulation();
+                    StartSimulation = false;
+                }
+
+                // Update to the wind direction periodically
+                windTimer += deltaTime;
+                if (windTimer >= windChangeInterval) {
+                    windDirection = getRandomWindDirection(); //Randomizes the wind direction
+                    windTimer = 0.0f; //Timer reset
+                }
+
+                clothBVH->refit();
+
+                if (currentObject)
+                    NewCollision::resolveCollision(particles, clothBVH, indices, *currentObject, deltaTime, collidingIndices, StaticFrictionCoefficient, KineticFrictionCoefficient);
+
+                for (auto& particle : particles) {
+
+                    Collision::resolveSelfCollision(particle, particles); // Check self-collision
+
+                    if (toggle_wind) {
+                        //Generates a random wind strength factor between -windOffsetSpeed and windOffsetSpeed
+                        float noise = windScale + ((static_cast<float>(rand()) / RAND_MAX) * 2.0f - 1.0f) * windOffsetSpeed;
+                        // Add turbulence and noise to wind
+                        float turbulence = sin(windTimer * 2.0f) * 0.1f;
+                        glm::vec3 windVariation = glm::vec3(
+                            turbulence * sin(particle.getPosition().x),
+                            turbulence * cos(particle.getPosition().y),
+                            turbulence * sin(particle.getPosition().z)
+                        );
+                        glm::vec3 wind = windDirection * noise + windVariation;
+                        particle.applyForce(wind);
+                    }
+
+                    particle.applyForce(glm::vec3(0.0f, gravity, 0.0f)); // Apply gravity
+                    particle.update(deltaTime);
+                }
+
+                // Update and render springs
+                for (auto& spring : springs) {
+                    spring.update();
+                }
+            }
+            else if (playingBakedSimulation) {
+                // Skip physics simulation and just update particle positions from baked data
+                simulationTime += deltaTime * playbackSpeed;
+                size_t frameToUse = static_cast<size_t>(
+                    (simulationTime / recordingDuration) * bakedFrames.size());
+
+                // Clamp to valid frame range
+                currentBakedFrame = std::min(frameToUse, bakedFrames.size() - 1);
+
+                if (currentBakedFrame < bakedFrames.size()) {
+                    const auto& frame = bakedFrames[currentBakedFrame];
+
+                    // Apply positions to particles
+                    for (size_t i = 0; i < particles.size() && i < frame.particlePositions.size(); ++i) {
+                        particles[i].setPosition(frame.particlePositions[i]);
+                    }
+
+                    // Apply normals directly
+                    normals = frame.meshNormals;
+
+                    // Update cloth mesh with playback data
+                    for (size_t i = 0; i < vertices.size() && i < particles.size(); ++i) {
+                        vertices[i] = particles[i].getPosition();
+                    }
+
+                    // Update cloth mesh VBO
+                    glBindVertexArray(VAO);
+                    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+                    glBufferSubData(GL_ARRAY_BUFFER, 0, vertices.size() * sizeof(glm::vec3), &vertices[0]);
+
+                    // Update normals VBO
+                    glBindBuffer(GL_ARRAY_BUFFER, normalVBO);
+                    glBufferSubData(GL_ARRAY_BUFFER, 0, normals.size() * sizeof(glm::vec3), &normals[0]);
+
+                    glBindVertexArray(0);
+
+                    // Loop playback if we've reached the end
+                    if (currentBakedFrame >= bakedFrames.size() - 1) {
+                        simulationTime = 0.0f;
+                        currentBakedFrame = 0;
+                    }
+                }
+            }
+            else {
+                // Update to the wind direction periodically
+                windTimer += deltaTime;
+                if (windTimer >= windChangeInterval) {
+                    windDirection = getRandomWindDirection(); //Randomizes the wind direction
+                    windTimer = 0.0f; //Timer reset
+                }
+
+                clothBVH->refit();
+
+                if (currentObject)
+                    NewCollision::resolveCollision(particles, clothBVH, indices, *currentObject, deltaTime, collidingIndices, StaticFrictionCoefficient, KineticFrictionCoefficient);
+
+                for (auto& particle : particles) {
+
+                    Collision::resolveSelfCollision(particle, particles); // Check self-collision
+
+                    if (toggle_wind) {
+                        //Generates a random wind strength factor between -windOffsetSpeed and windOffsetSpeed
+                        float noise = windScale + ((static_cast<float>(rand()) / RAND_MAX) * 2.0f - 1.0f) * windOffsetSpeed;
+                        // Add turbulence and noise to wind
+                        float turbulence = sin(windTimer * 2.0f) * 0.1f;
+                        glm::vec3 windVariation = glm::vec3(
+                            turbulence * sin(particle.getPosition().x),
+                            turbulence * cos(particle.getPosition().y),
+                            turbulence * sin(particle.getPosition().z)
+                        );
+                        glm::vec3 wind = windDirection * noise + windVariation;
+                        particle.applyForce(wind);
+                    }
+
+                    particle.applyForce(glm::vec3(0.0f, gravity, 0.0f)); // Apply gravity
+                    particle.update(deltaTime);
+                    if (ShowParticle)
+                        particle.render(shader->shaderProgram, view, projection);
+                }
+
+                // Update and render springs
+                for (auto& spring : springs) {
+                    spring.update();
+                    if (ShowSpring)
+                        spring.render(shader->shaderProgram, model, view, projection);
+                }
             }
         }
         glm::vec3 color = glm::vec3(1.0f, 0.0f, 0.0f);
@@ -1077,7 +1326,9 @@ void Application::MainLoop()
             table->render(tableShader->shaderProgram, view, projection);
         }
         
-        renderClothMesh(shader->shaderProgram, particles, view, projection);
+        if (!(bakingSimulation && !showBakingProgress)) {
+            renderClothMesh(shader->shaderProgram, particles, view, projection);
+        }
         // Render the table
 
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());

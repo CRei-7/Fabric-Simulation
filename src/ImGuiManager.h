@@ -56,7 +56,35 @@ public:
     void SetCube(bool* ptr) { SelectCube = ptr; }
     void SetTable(bool* ptr) { SelectTable = ptr; }
 
+    void DeltaTimeFlag(bool* ptr) { useCustomDelta = ptr; }
+    void SetDeltaTime(float* ptr) { Delta = ptr; }
+
     int GetFabricTypeUniform();
+
+    void SetSimulationBakingData(
+        bool* bakingSim,
+        bool* playingSim,
+        float* recDuration,
+        float* pbSpeed,
+        bool* showProgress,
+        float* simTime,
+        size_t* currentFrame,
+        size_t* totalFrames
+    );
+
+    void SetSimulationCallbacks(
+        std::function<void()> startBaking,
+        std::function<void()> stopBaking,
+        std::function<void()> playBaked,
+        std::function<void()> stopPlaying,
+        std::function<void(const std::string&)> saveBaked,
+        std::function<bool(const std::string&)> loadBaked
+    );
+
+    void ResetCloth(bool* ptr) { ClothReset = ptr; }
+
+    void SetDimensions(float* ptr1, float* ptr2) { width = ptr1; height = ptr2; }
+    void SetSeparation(float* ptr1, float* ptr2) { XDistance = ptr1; YDistance = ptr2; }
 
 private:
     ImVec4 clear_color;
@@ -92,6 +120,31 @@ private:
 
     int currentMaterialIndex = 0;
     //int* fabricType;
+
+    bool* bakingSimulation = nullptr;
+    bool* playingBakedSimulation = nullptr;
+    float* recordingDuration = nullptr;
+    float* playbackSpeed = nullptr;
+    bool* showBakingProgress = nullptr;
+    float* simulationTime = nullptr;
+    size_t* currentBakedFrame = nullptr;
+    size_t* totalFrameCount = nullptr;
+    std::function<void()> startBakingSimulationCallback;
+    std::function<void()> stopBakingSimulationCallback;
+    std::function<void()> playBakedSimulationCallback;
+    std::function<void()> stopPlayingBakedSimulationCallback;
+    std::function<void(const std::string&)> saveBakedSimulationCallback;
+    std::function<bool(const std::string&)> loadBakedSimulationCallback;
+
+    bool* useCustomDelta = nullptr;
+    float* Delta;
+
+    bool* ClothReset;
+
+    float* width;
+    float* height;
+    float* XDistance;
+    float* YDistance;
 };
 
 #endif // IMGUIMANAGER_H
