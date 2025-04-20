@@ -87,13 +87,126 @@ void ImGuiManager::Render()
         if (StartSimulation) {
             ImGui::Checkbox("Start Simulation", StartSimulation);
         }
+        if (useCustomDelta) {
+            ImGui::Checkbox("Custom Delta Time", useCustomDelta);
+        }
+        if (*useCustomDelta == true && Delta) {
+            ImGui::PushItemWidth(150);
+            ImGui::SliderFloat("Custom DeltaTime", Delta, 0.001f, 0.1f, "%.3f");
+            ImGui::PopItemWidth();
+        }
+        if (ClothReset) {
+            if (ImGui::Button("Reset")) {
+                *ClothReset = true;
+            }
+        }
         ImGui::EndGroup();
 
         ImGui::Spacing();
+        ImGui::BeginGroup();
+        ImGui::TextColored(ImVec4(0.4f, 0.7f, 1.0f, 1.0f), "Simulation Recording & Playback");
+        ImGui::Separator();
 
+        // Baking controls
+        if (bakingSimulation && *bakingSimulation) {
+            // Show progress while baking
+            float progress = simulationTime ? (*simulationTime / *recordingDuration) : 0.0f;
+            ImGui::ProgressBar(progress, ImVec2(-1, 0), "Recording...");
+            ImGui::Text("Time: %.2f / %.2f seconds", *simulationTime, *recordingDuration);
+
+            if (ImGui::Button("Stop Recording", ImVec2(120, 25))) {
+                if (stopBakingSimulationCallback) {
+                    stopBakingSimulationCallback();
+                }
+            }
+
+            // Toggle for showing progress while baking
+            if (showBakingProgress) {
+                ImGui::Checkbox("Show Progress While Recording", showBakingProgress);
+            }
+        }
+        else if (playingBakedSimulation && *playingBakedSimulation) {
+            // Playback controls
+            float progress = 0.0f;
+            if (totalFrameCount && *totalFrameCount > 0) {
+                progress = static_cast<float>(*currentBakedFrame) / static_cast<float>(*totalFrameCount);
+            }
+
+            ImGui::ProgressBar(progress, ImVec2(-1, 0), "Playing...");
+            ImGui::Text("Frame: %zu / %zu", *currentBakedFrame, totalFrameCount ? *totalFrameCount : 0);
+
+            ImGui::SliderFloat("Playback Speed", playbackSpeed, 0.1f, 3.0f, "%.1fx");
+
+            if (ImGui::Button("Stop Playback", ImVec2(150, 30))) {
+                if (stopPlayingBakedSimulationCallback) {
+                    stopPlayingBakedSimulationCallback();
+                }
+            }
+        }
+        else {
+            // Recording setup
+            ImGui::PushItemWidth(150);
+            ImGui::SliderFloat("Recording Time", recordingDuration, 1.0f, 50.0f, "%.1f s");
+            ImGui::PopItemWidth();
+
+            if (ImGui::Button("Start Recording", ImVec2(120, 25))) {
+                if (startBakingSimulationCallback) {
+                    startBakingSimulationCallback();
+                }
+            }
+
+            ImGui::SameLine();
+
+            // Only enable play button if there are frames to play
+            bool hasFrames = totalFrameCount && *totalFrameCount > 0;
+            if (ImGui::Button("Play Recording", ImVec2(120, 25)) && hasFrames) {
+                if (playBakedSimulationCallback) {
+                    playBakedSimulationCallback();
+                }
+            }
+
+            if (!hasFrames && ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("No recorded simulation available");
+            }
+
+            // Save/Load buttons
+            ImGui::Spacing();
+
+            static char saveFilename[256] = "simulation.bin";
+            ImGui::InputText("Filename", saveFilename, IM_ARRAYSIZE(saveFilename));
+
+            ImGui::BeginGroup();
+            if (ImGui::Button("Save Recording", ImVec2(120, 25)) && hasFrames) {
+                if (saveBakedSimulationCallback) {
+                    saveBakedSimulationCallback(std::string(saveFilename));
+                }
+            }
+
+            ImGui::SameLine();
+
+            if (ImGui::Button("Load Recording", ImVec2(120, 25))) {
+                if (loadBakedSimulationCallback) {
+                    loadBakedSimulationCallback(std::string(saveFilename));
+                }
+            }
+            ImGui::EndGroup();
+        }
+
+        ImGui::EndGroup();
+
+        ImGui::Spacing();
         ImGui::BeginGroup();
         ImGui::TextColored(ImVec4(0.4f, 0.7f, 1.0f, 1.0f), "Cloth Dynamics");
         ImGui::Separator();
+        
+        if (width && height) {
+            ImGui::SliderFloat("Width", width, 0.1f, 3.0f);
+            ImGui::SliderFloat("Height", height, 0.1f, 3.0f);
+        }
+        if (XDistance && YDistance) {
+            ImGui::SliderFloat("disX", XDistance, 0.01f, 0.2f);
+            ImGui::SliderFloat("disY", YDistance, 0.01f, 0.2f);
+        }
 
         if (toggleWind) {
             ImGui::Checkbox("Wind Enabled", toggleWind);
@@ -373,4 +486,31 @@ bool& ImGuiManager::ShowDemoWindow()
 bool& ImGuiManager::ShowAnotherWindow()
 {
     return show_another_window;
+}
+
+void ImGuiManager::SetSimulationBakingData(bool* bakingSim, bool* playingSim, float* recDuration, float* pbSpeed, bool* showProgress, float* simTime, size_t* currentFrame, size_t* totalFrames) {
+    bakingSimulation = bakingSim;
+    playingBakedSimulation = playingSim;
+    recordingDuration = recDuration;
+    playbackSpeed = pbSpeed;
+    showBakingProgress = showProgress;
+    simulationTime = simTime;
+    currentBakedFrame = currentFrame;
+    totalFrameCount = totalFrames;
+}
+
+void ImGuiManager::SetSimulationCallbacks(
+    std::function<void()> startBaking,
+    std::function<void()> stopBaking,
+    std::function<void()> playBaked,
+    std::function<void()> stopPlaying,
+    std::function<void(const std::string&)> saveBaked,
+    std::function<bool(const std::string&)> loadBaked
+) {
+    startBakingSimulationCallback = startBaking;
+    stopBakingSimulationCallback = stopBaking;
+    playBakedSimulationCallback = playBaked;
+    stopPlayingBakedSimulationCallback = stopPlaying;
+    saveBakedSimulationCallback = saveBaked;
+    loadBakedSimulationCallback = loadBaked;
 }
