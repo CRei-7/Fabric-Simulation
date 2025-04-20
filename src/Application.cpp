@@ -388,13 +388,14 @@ void Application::setupCloth() {
     int column = static_cast<int>(clothWidth / disX) + 1;  // +1 because we need particles at edges
     int row = static_cast<int>(clothHeight / disY) + 1;    // +1 because we need particles at edges
 
+    // int column = 25;
+    // int row = 25;
     // Recalculate actual cloth dimensions (might be slightly different due to integer division)
     float actualClothWidth = (column - 1) * disX;
     float actualClothHeight = (row - 1) * disY;
 
     // Calculate offset to center the cloth along y-axis
     glm::vec3 Offset(-actualClothWidth / 2.0f, 0.0f, 0.12f); // Centered offset for initial position
-
 
     gravity = -0.05f;
 
@@ -1012,7 +1013,6 @@ void Application::MainLoop()
                 windTimer = 0.0f; //Timer reset
             }
 
-
             clothBVH->refit();
             //std::cout << " Without BVH: " << NewCollision::collisionChecks << "\n";
             //std::cout << " - With BVH: " << NewCollision::bvhCollisionChecks << "\n";
@@ -1020,6 +1020,7 @@ void Application::MainLoop()
                 NewCollision::resolveCollision(particles, clothBVH, indices, *currentObject, deltaTime, collidingIndices, StaticFrictionCoefficient, KineticFrictionCoefficient);
             //NewCollision::resolveCollisionWithOutBVH(particles, indices, Sphere, deltaTime, collidingIndices);
 
+            // for (int s = 0; s < substeps; ++s) {
             for (auto& particle : particles) {
                 //resolveCollision(particle, Cube   );
                 //for (int i = 0; i < 20; ++i) {
@@ -1043,6 +1044,13 @@ void Application::MainLoop()
                 }
 
                 particle.applyForce(glm::vec3(0.0f, gravity, 0.0f)); // Apply gravity
+                if (!particle.getStatic()) {
+                    glm::vec3 pos = particle.getPosition();
+                    glm::vec3 prev = particle.getPreviousPosition();
+                    glm::vec3 velocity = (pos - prev) / deltaTime;
+                    velocity *= 0.99f; // 1% reduction per frame
+                    particle.setPreviousPosition(pos - velocity * deltaTime);
+                }
                 particle.update(deltaTime);
                 if (ShowParticle)
                     particle.render(shader->shaderProgram, view, projection);
@@ -1055,6 +1063,8 @@ void Application::MainLoop()
                     spring.render(shader->shaderProgram, model, view, projection);
             }
         }
+        // }
+
         glm::vec3 color = glm::vec3(1.0f, 0.0f, 0.0f);
 
         if (!StartSimulation) {
@@ -1073,10 +1083,11 @@ void Application::MainLoop()
             currentObject->render(shader->shaderProgram, view, projection, lightPos, cameraPos, color);
 
         if (SelectTable) {
-            CollisionDetection::resolveClothTableCollisions(particles, *table);
+
+            CollisionDetection::resolveClothTableCollisions(particles, *table, deltaTime);
             table->render(tableShader->shaderProgram, view, projection);
         }
-        
+
         renderClothMesh(shader->shaderProgram, particles, view, projection);
         // Render the table
 

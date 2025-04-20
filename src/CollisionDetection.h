@@ -7,7 +7,7 @@
 
 class CollisionDetection {
 public:
-    static void resolveClothTableCollisions(std::vector<Particle>& particles, const Table& table);
+    static void resolveClothTableCollisions(std::vector<Particle>& particles, const Table& table, float deltaTime);
 };
 
 #endif // COLLISIONDETECTION_H
