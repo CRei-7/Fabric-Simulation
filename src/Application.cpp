@@ -1344,6 +1344,13 @@ void Application::MainLoop()
                     }
 
                     particle.applyForce(glm::vec3(0.0f, gravity, 0.0f)); // Apply gravity
+                    if (!particle.getStatic()) {
+                        glm::vec3 pos = particle.getPosition();
+                        glm::vec3 prev = particle.getPreviousPosition();
+                        glm::vec3 velocity = (pos - prev) / deltaTime;
+                        velocity *= 0.99f; // 1% reduction per frame
+                        particle.setPreviousPosition(pos - velocity * deltaTime);
+                    }
                     particle.update(deltaTime);
                     if (ShowParticle)
                         particle.render(shader->shaderProgram, view, projection);
@@ -1377,6 +1384,8 @@ void Application::MainLoop()
             currentObject->render(shader->shaderProgram, view, projection, lightPos, cameraPos, color);
 
         if (SelectTable) {
+            int numSubsteps = 1000; // Adjust based on performance
+                float subDeltaTime = deltaTime / numSubsteps;
 
             CollisionDetection::resolveClothTableCollisions(particles, *table, deltaTime);
             table->render(tableShader->shaderProgram, view, projection);
