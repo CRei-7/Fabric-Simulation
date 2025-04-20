@@ -8,12 +8,14 @@ void CollisionDetection::resolveClothTableCollisions(std::vector<Particle>& part
 
     // Small offset to push particles slightly outside surfaces after collision
     const float epsilon = 0.003f; // Adjust as needed
-
+    const float collision_margin = 0.0455f; // Adjust as needed
+    const float damp = 0.99f;
     // Table top vertical range
     float top_thickness = table.table_height - table.top_center.y;
     float top_y_min = table.top_center.y; // Bottom of table top
     float top_y_max = table.table_height; // Top of table top
 
+    const float extended_radius = table.r_top + collision_margin;
     for (auto& particle : particles) {
         if (particle.getStatic()) continue;
 
@@ -23,6 +25,7 @@ void CollisionDetection::resolveClothTableCollisions(std::vector<Particle>& part
 
         // Estimate velocity (used for friction)
         glm::vec3 velocity = (position - previousPosition) / deltaTime;
+        velocity *= damp;
 
         // Compute XZ position relative to table center
         glm::vec2 xz_pos(position.x - table.top_center.x, position.z - table.top_center.z);
@@ -31,7 +34,7 @@ void CollisionDetection::resolveClothTableCollisions(std::vector<Particle>& part
         float dist_xz_prev = glm::length(xz_pos_prev);
 
         // --- Check collision with table top ---
-        if (dist_xz <= table.r_top && position.y <= table.table_height && position.y >= top_y_min) {
+        if (dist_xz <= extended_radius && position.y <= table.table_height && position.y >= top_y_min) {
             // Check if it crossed downwards or started below/on surface
             if (previousPosition.y >= table.table_height || position.y < table.table_height) {
                 // --- Collision Response ---
@@ -50,6 +53,8 @@ void CollisionDetection::resolveClothTableCollisions(std::vector<Particle>& part
                 float velocityNormalComp = glm::dot(effective_velocity, normal);
                 glm::vec3 velocityTangent = effective_velocity - velocityNormalComp * normal;
 
+                velocityNormalComp *= damp;
+                velocityTangent *= damp;
                 float frictionCoefficient = 0.1f;
                 if (glm::length(velocityTangent) > std::numeric_limits<float>::epsilon()) {
                     glm::vec3 frictionDirection = -glm::normalize(velocityTangent);
@@ -71,6 +76,7 @@ void CollisionDetection::resolveClothTableCollisions(std::vector<Particle>& part
                 position = newPosition;
                 previousPosition = projectedPrevPos;
                 velocity = (position - previousPosition) / deltaTime;
+                velocity *= damp;
                 xz_pos = glm::vec2(position.x - table.top_center.x, position.z - table.top_center.z);
                 dist_xz = glm::length(xz_pos);
                 xz_pos_prev = glm::vec2(previousPosition.x - table.top_center.x, previousPosition.z - table.top_center.z);
@@ -90,7 +96,7 @@ void CollisionDetection::resolveClothTableCollisions(std::vector<Particle>& part
 
             // Cylinder parameters (in XZ plane, centered at table.top_center)
             glm::vec2 cylinder_center(table.top_center.x, table.top_center.z);
-            float radius = table.r_top;
+            float radius = extended_radius;
 
             // Ray-cylinder intersection in XZ plane (2D circle intersection)
             glm::vec2 p0(ray_start.x, ray_start.z);
@@ -147,6 +153,9 @@ void CollisionDetection::resolveClothTableCollisions(std::vector<Particle>& part
                         float velocityNormalComp = glm::dot(effective_velocity, normal);
                         glm::vec3 velocityTangent = effective_velocity - velocityNormalComp * normal;
 
+                        velocityNormalComp *= damp;
+                        velocityTangent *= damp;
+
                         float frictionCoefficient = 0.2f;
                         if (glm::length(velocityTangent) > std::numeric_limits<float>::epsilon()) {
                             glm::vec3 frictionDirection = -glm::normalize(velocityTangent);
@@ -168,6 +177,7 @@ void CollisionDetection::resolveClothTableCollisions(std::vector<Particle>& part
                         position = newPosition;
                         previousPosition = projectedPrevPos;
                         velocity = (position - previousPosition) / deltaTime;
+                        velocity *= damp;
                         xz_pos = glm::vec2(position.x - table.top_center.x, position.z - table.top_center.z);
                         dist_xz = glm::length(xz_pos);
                         xz_pos_prev = glm::vec2(previousPosition.x - table.top_center.x, previousPosition.z - table.top_center.z);
