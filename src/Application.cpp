@@ -432,7 +432,10 @@ void Application::setupCloth() {
             for (int j = 0; j < row; ++j) {
                 float xPos = i * disX + Offset.x;
                 float yPos = initialY - j * disY; // Starts from initialY and moves downward
-                bool staticParticle = j == 0; // Top row particles are static
+                bool staticParticle = false;
+                if ((i == 0 && j == 0) || (i == column-1 && j == 0))
+                    staticParticle = true;
+                //bool staticParticle = j == 0; // Top row particles are static
                 particles.emplace_back(glm::vec3(xPos, yPos, 0.0f), staticParticle);
             }
         }
