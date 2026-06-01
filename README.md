@@ -1,7 +1,7 @@
-# Knit Fabric Simulation Documentation
+# Fabric Simulation Documentation
 
 ## Overview
-This project implements a physically-based knit fabric simulation using OpenGL. The simulation features material based cloth dynamics, collision detection, procedural fur generation and texture mapping, and advanced rendering capabilities.
+This project implements a physically-based fabric simulation using OpenGL. The simulation features material based cloth dynamics, collision detection, procedural fur generation and texture mapping, and advanced rendering capabilities.
 
 <p align="center">
   <img src="images/furmap.png" width="30%">
